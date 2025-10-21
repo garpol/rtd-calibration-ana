@@ -5,132 +5,258 @@ import matplotlib.pyplot as plt
 from matplotlib.cm import get_cmap
 from typing import Literal
 import numpy as np
-from run import Run
+from .run import Run
+import yaml
+from typing import Optional
+from .utils import load_config, DEFAULT_CONFIG
+
+# Module-level default sensors (fallback) - kept here for backward compatibility but can be moved to config
+DEFAULT_SENSORS = {
+    'discarded_sensors': {
+        3.0: [48205, 48478],
+        4.0: [48485, 48490],
+        5.0: [48797],
+        6.0: [48733, 48746],
+        7.0: [48751, 48754, 48836],
+        8.0: [48841, 48848],
+        14.0: [48957, 48960, 48961],
+        15.0: [48520, 48965],
+        16.0: [49107, 49108],
+        17.0: [49117, 49124],
+        18.0: [49166],
+        19.0: [49169],
+        21.0: [49191, 49200],
+        22.0: [49205, 49210],
+        23.0: [49226, 49235, 49236, 49237],
+        24.0: [49242],
+        25.0: [49251, 49253],
+        26.0: [55190, 55043, 55104],
+        27.0: [55103, 55075, 55072],
+        28.0: [55199, 55198],
+        29.0: [55193],
+        30.0: [55255, 55173, 54926],
+        31.0: [55195],
+        32.0: [54931],
+        33.0: [54934],
+        35.0: [55231, 55232, 55245],
+        36.0: [55040],
+        37.0: [55015, 55083],
+        38.0: [55237],
+        40.0: [55205],
+        42.0: [55019],
+        46.0: [49107],
+        47.0: [55199],
+        48.0: [55245],
+        60.0: [58384],
+    },
+    'sensors_raised_by_set': {
+        3.0: [48203, 48479],
+        4.0: [48484, 48491],
+        5.0: [48673, 48800],
+        6.0: [48731, 48747],
+        7.0: [48753, 48839],
+        8.0: [48845, 48851],
+        9.0: [48857, 48863],
+        10.0: [48869, 48875],
+        11.0: [48884, 48887],
+        13.0: [48905, 48911],
+        14.0: [48956, 48963],
+        15.0: [48521, 48964],
+        16.0: [49106, 49112],
+        17.0: [49119, 49123],
+        18.0: [49126, 49131],
+        19.0: [49167, 49176],
+        20.0: [49181, 49186],
+        21.0: [49192, 49197],
+        22.0: [49204, 49211],
+        23.0: [49227, 49233],
+        24.0: [49238, 49244],
+        25.0: [49250, 49257],
+        26.0: [54875, 55044],
+        27.0: [55073, 54881],
+        28.0: [55208, 55215],
+        29.0: [55264, 55263],
+        30.0: [55253, 55168],
+        31.0: [55186, 55194],
+        32.0: [55166, 54930],
+        33.0: [54878, 54876],
+        34.0: [54878, 54876],
+        35.0: [55241, 55233],
+        36.0: [55050, 55041],
+        37.0: [55014, 55084],
+        38.0: [55217, 55221],
+        39.0: [55252, 55188],
+        40.0: [54869, 54870],
+        41.0: [54840, 54841],
+        42.0: [54897, 55022],
+        43.0: [55021, 55023],
+        44.0: [54856, 54845],
+        45.0: [55056, 55061],
+        46.0: [48957, 49235],
+        47.0: [55075, 55195],
+        48.0: [55015, 55173],
+        59.0: [58400, 58367],
+        60.0: [58385, 58381],
+        49.0: [48484, 48747],
+        50.0: [48869, 48956],
+        51.0: [49112, 49167],
+        52.0: [49233, 55073],
+        53.0: [55253, 55227],
+        54.0: [55233, 55221],
+    },
+    'set_rounds': {},
+}
 
 class Set:
-    def __init__(self, logfile: pd.DataFrame) -> None:
-        """
-        Inicializa el conjunto de datos que agrupa varios 'Run' por el 'CalibSetNumber'.
-        """
-        self.logfile = logfile
-        self.runs_by_set = {}  # Diccionario para almacenar instancias de la clase Run por CalibSetNumber
-        self.offsets_data = None  # Matriz de offsets de todos los runs
-        self.rms_offsets_data = None  # Matriz de errores RMS de todos los runs
-        self.calibration_constants = None  # Constantes de calibración calculadas
+    def __init__(self, logfile: pd.DataFrame, config: dict = None, config_path: Optional[str] = None) -> None:
+        """Initialize a Set that groups multiple Run instances by CalibSetNumber.
         
-        self.sensores_descartados = {
-            3.0: [48205, 48478],
-            4.0: [48485, 48490],
-            5.0: [48797],
-            6.0: [48733, 48746],
-            7.0: [48751, 48754, 48836],
-            8.0: [48841, 48848],
-            14.0: [48957, 48960, 48961],
-            15.0: [48520, 48965],
-            16.0: [49107, 49108],
-            17.0: [49117, 49124],
-            18.0: [49166],
-            19.0: [49169],
-            21.0: [49191, 49200],
-            22.0: [49205, 49210],
-            23.0: [49226, 49235, 49236, 49237],
-            24.0: [49242],
-            25.0: [49251, 49253],
-            26.0: [55190, 55043, 55104],
-            27.0: [55103, 55075, 55072],
-            28.0: [55199, 55198],
-            29.0: [55193],
-            30.0: [55255, 55173, 54926],
-            31.0: [55195],
-            32.0: [54931],
-            33.0: [54934],
-            35.0: [55231, 55232, 55245],
-            36.0: [55040],
-            37.0: [55015, 55083],
-            38.0: [55237],
-            40.0: [55205],
-            42.0: [55019],
-            46.0: [49107],
-            47.0: [55199],
-            48.0: [55245],
-            60.0:[58384],
-            
-        }
+        Parameters:
+            logfile (pd.DataFrame): DataFrame containing sensor assignments and metadata
+            config (dict, optional): Configuration dict with per-set sensor mappings.
+                If provided, overrides default discarded_sensors/sensors_raised_by_set.
+        """
+        # If config_path provided, load it; otherwise normalize provided config dict
+        combined_cfg = None
+        try:
+            if config_path:
+                combined_cfg = load_config(config_path)
+            elif isinstance(config, dict):
+                # merge with defaults
+                merged = DEFAULT_CONFIG.copy()
+                for k, v in config.items():
+                    if isinstance(v, dict) and isinstance(merged.get(k), dict):
+                        merged[k] = {**merged[k], **v}
+                    else:
+                        merged[k] = v
+                combined_cfg = merged
+        except Exception as e:
+            print(f"Warning: could not load config: {e}")
+
+        # Configure logfile source: logfile parameter may be a DataFrame, or a path, or None
+        if isinstance(logfile, pd.DataFrame):
+            self.logfile = logfile
+        else:
+            # prefer path from config if available
+            lf_path = None
+            if combined_cfg:
+                lf_path = combined_cfg.get('paths', {}).get('logfile')
+            lf_path = logfile or lf_path
+            from .logfile import Logfile
+            lf = Logfile(filepath=lf_path)
+            self.logfile = lf.log_file
+        self.runs_by_set = {}  # Dict mapping CalibSetNumber to Run instances
+        self.offsets_data = None  # Matrix of offsets from all runs
+        self.rms_offsets_data = None  # Matrix of RMS errors from all runs
+        self.calibration_constants = None  # Calibration constants calculated
+        # Defaults; these can be overridden by passing a `config` dict or a `config_path` to Set
+        self.discarded_sensors = DEFAULT_SENSORS.get('discarded_sensors', {})
+        self.sensors_raised_by_set = DEFAULT_SENSORS.get('sensors_raised_by_set', {})
+        # Default rounds mapping (can be overridden by config)
+        self.set_rounds = DEFAULT_SENSORS.get('set_rounds', {})
+
+        # Apply config overrides if provided (config dict or config_path)
+        loaded_cfg = None
+        if config_path and not config:
+            try:
+                with open(config_path, 'r') as f:
+                    loaded_cfg = yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"Warning: could not load config_path '{config_path}': {e}")
+        elif isinstance(config, str) and not config_path:
+            # config passed as a path string
+            try:
+                with open(config, 'r') as f:
+                    loaded_cfg = yaml.safe_load(f) or {}
+            except Exception as e:
+                print(f"Warning: could not load config from string path '{config}': {e}")
+        elif isinstance(config, dict):
+            loaded_cfg = config
+
+        if loaded_cfg:
+            try:
+                sensors_cfg = loaded_cfg.get("sensors", {})
+                # If user provided unified per-set structure under sensors.sets, prefer it
+                sets_cfg = sensors_cfg.get("sets")
+                if isinstance(sets_cfg, dict) and sets_cfg:
+                    # normalize and populate the three dictionaries
+                    sd = {}
+                    sr = {}
+                    srounds = {}
+                    for ks, vv in sets_cfg.items():
+                        # Normalize set key to float if possible; skip if not
+                        try:
+                            kf = float(ks)
+                        except Exception:
+                            try:
+                                kf = float(str(ks))
+                            except Exception:
+                                # skip entries with non-numeric keys
+                                continue
+                        # support both Spanish and English keys inside each set entry
+                        discarded_list = vv.get("discarded") or vv.get("descartados") or vv.get("discarded_sensors") or []
+                        raised_list = vv.get("raised") or vv.get("rojo") or vv.get("sensors_raised") or []
+                        sd[kf] = discarded_list
+                        sr[kf] = raised_list
+                        # parse round robustly; allow numeric strings, otherwise skip this field
+                        round_raw = vv.get("round", 1)
+                        try:
+                            srounds[kf] = int(float(round_raw))
+                        except Exception:
+                            # ignore invalid non-numeric round values (e.g., 'Refs')
+                            pass
+                    # assign to English-named attributes consistently
+                    self.discarded_sensors = sd
+                    self.sensors_raised_by_set = sr
+                    self.set_rounds = srounds
+                else:
+                    # backward-compatible fields (accept both English and Spanish keys)
+                    if sensors_cfg.get("discarded_sensors") or sensors_cfg.get("descartados"):
+                        raw = sensors_cfg.get("discarded_sensors") or sensors_cfg.get("descartados")
+                        self.discarded_sensors = {float(k): v for k, v in raw.items()}
+                    if sensors_cfg.get("sensors_raised_by_set") or sensors_cfg.get("sensors_raised") or sensors_cfg.get("rojo"):
+                        raw = sensors_cfg.get("sensors_raised_by_set") or sensors_cfg.get("sensors_raised") or sensors_cfg.get("rojo")
+                        self.sensors_raised_by_set = {float(k): v for k, v in raw.items()}
+                    if sensors_cfg.get("set_rounds"):
+                        normalized_rounds = {}
+                        for k, v in sensors_cfg.get("set_rounds", {}).items():
+                            try:
+                                kf = float(k)
+                            except Exception:
+                                try:
+                                    kf = float(str(k))
+                                except Exception:
+                                    continue
+                            try:
+                                normalized_rounds[kf] = int(float(v))
+                            except Exception:
+                                # skip invalid round values
+                                continue
+                        self.set_rounds = normalized_rounds
+            except Exception as e:
+                print(f"Warning: failed to apply sensors config: {e}")
+
+        # plots default directory (can be controlled via config paths)
+        self.plots_dir = None
+        if config and isinstance(config, dict):
+            paths_cfg = config.get("paths", {})
+            self.plots_dir = paths_cfg.get("plots_dir")
+        if not self.plots_dir:
+            self.plots_dir = "RTD_Calibration_VGP/notebooks/Plots"
+        # Output write defaults (can be overridden by providing 'output' in config loaded earlier)
+        # Default to True for backward compatibility
+        if not hasattr(self, 'write_csv'):
+            self.write_csv = True
+        if not hasattr(self, 'write_excel'):
+            self.write_excel = True
         
-        self.sensor_rojo_por_set = {
-            3.0: [48203, 48479],
-            4.0: [48484, 48491],
-            5.0: [48673, 48800],
-            6.0: [48731, 48747],
-            7.0: [48753, 48839],
-            8.0: [48845, 48851],
-            9.0: [48857, 48863],
-            10.0: [48869, 48875],
-            11.0: [48884, 48887],
-            13.0: [48905, 48911],
-            14.0: [48956, 48963],
-            15.0: [48521, 48964],
-            16.0: [49106, 49112],
-            17.0: [49119, 49123],
-            18.0: [49126, 49131],
-            19.0: [49167, 49176],
-            20.0: [49181, 49186],
-            21.0: [49192, 49197],
-            22.0: [49204, 49211],
-            23.0: [49227, 49233],
-            24.0: [49238, 49244],
-            25.0: [49250, 49257],
-            26.0: [54875, 55044],
-            27.0: [55073, 54881],
-            28.0: [55208, 55215],
-            29.0: [55264, 55263],
-            30.0: [55253, 55168],
-            31.0: [55186, 55194],
-            32.0: [55166, 54930],
-            33.0: [54878, 54876],
-            34.0: [54878, 54876],
-            35.0: [55241, 55233],
-            36.0: [55050, 55041],
-            37.0: [55014, 55084],
-            38.0: [55217, 55221],
-            39.0: [55252, 55188],
-            40.0: [54869, 54870],
-            41.0: [54840, 54841],
-            42.0: [54897, 55022], 
-            43.0: [55021, 55023],
-            44.0: [54856, 54845],
-            45.0: [55056, 55061],
-            46.0: [48957, 49235],
-            47.0: [55075, 55195],
-            48.0: [55015, 55173],
-            59.0: [58400,58367],
-            60.0: [58385,58381],
-            #61.0: [,], acaban primeras rondas aquí, faltan por comprar 
-            
-            49.0: [48484, 48747], #ya son 2a ronda:
-            50.0: [48869,48956],
-            51.0: [49112, 49167],
-            52.0: [49233, 55073],
-            53.0: [55253,55227],
-            54.0: [55233,55221],
-            
-            #55.0: [54869,54870, 54840, 54897, 54845, 55061], aqui ya subimos 6 por ser la segunda rama del tree, 
-            #2a ronda también:
-            #56.0: [,],
-            
-            #57.0: [,], 3a ronda - 1
-            #62.0: [,], 3a ronda -2 
-            
-            #63.0: [,], 4a ronda
-            
-            #58.0: [,], referencias, va a parte
-        }
 
     
     def group_runs_by_set(self, selected_sets=None) -> None:
         """
-        Agrupa los runs por el 'CalibSetNumber' y crea instancias de la clase 'Run' para cada uno,
-        excluyendo aquellos cuyo 'Filename' contenga la palabra 'pre'...
+        Group runs by 'CalibSetNumber' and create instances of the 'Run' class for each one.
+        Excludes filenames that contain certain keywords (e.g. 'pre', 'st', 'lar') and runs
+        marked as 'BAD' in the Selection column.
         """
         try:
             self.logfile["CalibSetNumber"] = pd.to_numeric(self.logfile["CalibSetNumber"], errors='coerce')
@@ -139,18 +265,18 @@ class Set:
                 calib_set_number for calib_set_number in calib_set_numbers
                 if isinstance(calib_set_number, (int, float)) and float(calib_set_number).is_integer()
                 and calib_set_number > 0
-                and len(str(int(calib_set_number))) <= 2  # Verifica que el número tenga dos o menos caracteres
+                and len(str(int(calib_set_number))) <= 2  # Verify that the number has two or fewer digits
             ])
             excluded_keywords = ['pre', 'st', 'lar']  # Palabras a excluir de los filenames
             # Agrupar los runs por CalibSetNumber
             for calib_set_number in calib_set_numbers:
                 if selected_sets and calib_set_number not in selected_sets:
                     continue
-                print(f"\nProcesando CalibSetNumber: {calib_set_number}")  # Imprime el CalibSetNumber actual
+                print(f"\nProcessing CalibSetNumber: {calib_set_number}")
                 # Filtramos el logfile para obtener todos los runs de este CalibSetNumber
                 runs_in_set = self.logfile[self.logfile["CalibSetNumber"] == calib_set_number]
                 valid_runs = {}
-                #self.runs_by_set[calib_set_number] = {} ahora se inicializa después con los sets válidos
+                # self.runs_by_set[calib_set_number] = {} now initialized later with valid sets
 
                 # Iteramos por cada run en el set
                 for _, run_row in runs_in_set.iterrows():
@@ -158,17 +284,32 @@ class Set:
                     selection = run_row["Selection"]
 
                     if isinstance(filename, str) and all(keyword not in filename.lower() for keyword in excluded_keywords):
-                        if selection != "BAD":  # Verificar que el run no esté marcado como 'BAD'
+                        if selection != "BAD":  # Verify that the run is not marked as 'BAD'
                             run_instance = Run(filename, self.logfile)
-                            #self.runs_by_set[calib_set_number][filename] = run_instance
+                            # Try to associate sensors, read run info, and filter faulty channels
+                            try:
+                                run_instance.associate_sensors()
+                                run_instance.read_run_info()
+                                # Call filter_faulty_channels to detect additional issues beyond NaN counts
+                                faulty = run_instance.filter_faulty_channels()
+                                # Update defective_channels with any additional issues found
+                                if faulty:
+                                    # Merge detected faults into defective_channels (avoid duplicates)
+                                    existing_defective = set(run_instance.defective_channels or [])
+                                    existing_defective.update(faulty.keys())
+                                    run_instance.defective_channels = list(existing_defective)
+                            except Exception as e:
+                                print(f"    Warning: failed to associate sensors or read run info for {filename}: {e}. Skipping this run.")
+                                continue
+                            # If association succeeded, keep the run
                             valid_runs[filename] = run_instance
-                            print(f"    Incluido: {filename}")
+                            print(f"    Included: {filename}")
                         else:
-                            print(f"    Excluido: {filename} (marcado como 'BAD' en Selection)")
+                            print(f"    Excluded: {filename} (marked as 'BAD' in Selection)")
                     else:
-                        print(f"    Excluido: {filename} (contiene 'pre' o 'st')")
+                        print(f"    Excluded: {filename} (contains 'pre' or 'st')")
                         
-                # Solo guardar el grupo si hay runs válidos
+                # Only save the group if there are valid runs
                 if valid_runs:
                     self.runs_by_set[calib_set_number] = valid_runs
                         
@@ -177,7 +318,7 @@ class Set:
             raise
             
         except Exception as e:
-            raise RuntimeError(f"Error al agrupar los runs: {e}")
+            raise RuntimeError(f"Error grouping runs: {e}")
 
     def calculate_offsets_and_rms(self, selected_sets=None) -> None:
         """
@@ -189,14 +330,15 @@ class Set:
         try:
             offsets_list = []
             rms_list = []
+            keys_for_concat = []
 
             # Itera sobre los runs y calcula offsets y RMS
             for calib_set_number, runs_in_set in self.runs_by_set.items():
                 if selected_sets and calib_set_number not in selected_sets:
                     continue
-                print(f"\nProcesando CalibSetNumber: {calib_set_number}")
+                print(f"\nProcessing CalibSetNumber: {calib_set_number}")
 
-                # Encuentra el run con más sensores (referencia) dentro de este set
+                # Find the run with the most sensors (reference) within this set
                 max_sensors = 0
                 reference_run = None
                 for run_instance in runs_in_set.values():
@@ -206,93 +348,99 @@ class Set:
                             max_sensors = num_sensors
                             reference_run = run_instance
                     else:
-                        print(f"Advertencia: sensor_mapping es None para el run {run_instance.filename}. Se omite este run.")
+                        print(f"Warning: sensor_mapping is None for run {run_instance.filename}. Skipping this run.")
 
                 if not reference_run:
-                    print(f"No se encontró un run válido para calcular los offsets en el set {calib_set_number}.")
+                    print(f"No valid run found to compute offsets in set {calib_set_number}.")
                     continue
 
-                print(f"El run de referencia tiene {max_sensors} sensores y es: {reference_run.filename}")
-                print("Sensor mapping de referencia:")
+                print(f"Reference run has {max_sensors} sensors: {reference_run.filename}")
+                print("Reference sensor mapping:")
                 print(f"Sensor_mapping : {reference_run.sensor_mapping}")
-                print(reference_run.sensor_mapping.keys())
-                print(reference_run.sensor_mapping.items())
-                print(reference_run.sensor_mapping.values())
 
                 # Usa el orden del run de referencia
                 reference_sensors = list(reference_run.sensor_mapping.values())
-                print(f"Referencia basada en el run: {reference_run.filename} con sensores: {reference_sensors}")
+                print(f"Reference based on run: {reference_run.filename} with sensors: {reference_sensors}")
 
                 for filename, run_instance in runs_in_set.items():
-                    print(f"  Procesando Run: {filename}")
+                    print(f"  Processing Run: {filename}")
 
                     if run_instance.sensor_mapping is not None:
                         current_sensors = list(run_instance.sensor_mapping.values())
                         print(f"Current sensors: {current_sensors}")
 
-                        # Calcular offsets y RMS
-                        offsets = run_instance.offsets()
-                        rms_offsets = run_instance.stat_err_offsets()
+                        try:
+                            # Calcular offsets y RMS
+                            offsets = run_instance.offsets()
+                            rms_offsets = run_instance.stat_err_offsets()
 
-                        # Crear DataFrames con el orden actual
-                        offsets_df = pd.DataFrame(offsets, index=current_sensors, columns=current_sensors)
-                        rms_df = pd.DataFrame(rms_offsets, index=current_sensors, columns=current_sensors)
+                            # Crear DataFrames con el orden actual
+                            offsets_df = pd.DataFrame(offsets, index=current_sensors, columns=current_sensors)
+                            rms_df = pd.DataFrame(rms_offsets, index=current_sensors, columns=current_sensors)
 
-                        print("  → Matriz de offsets ORIGINAL:")
-                        print(offsets_df)
+                            print("  → ORIGINAL offsets matrix:")
+                            print(offsets_df)
 
-                        # Reordenar filas y columnas según el orden de referencia
-                        offsets_df = offsets_df.reindex(index=reference_sensors, columns=reference_sensors)
-                        rms_df = rms_df.reindex(index=reference_sensors, columns=reference_sensors)
+                            # Reorder rows and columns according to reference order
+                            offsets_df = offsets_df.reindex(index=reference_sensors, columns=reference_sensors)
+                            rms_df = rms_df.reindex(index=reference_sensors, columns=reference_sensors)
 
-                        print("  → Matriz de offsets REORDENADA:")
-                        print(offsets_df)
+                            print("  → REORDERED offsets matrix:")
+                            print(offsets_df)
 
-                        offsets_list.append(offsets_df)
-                        rms_list.append(rms_df)
+                            offsets_list.append(offsets_df)
+                            rms_list.append(rms_df)
+                            keys_for_concat.append(calib_set_number)
 
-                        print(f"  Dimensiones de la matriz de offsets: {offsets_df.shape}")
-                        print(f"  Dimensiones de la matriz de RMS: {rms_df.shape}")
+                            print(f"  Dimensiones de la matriz de offsets: {offsets_df.shape}")
+                            print(f"  Dimensiones de la matriz de RMS: {rms_df.shape}")
+                        except Exception as e:
+                            print(f"  ⚠️  Warning: Could not compute offsets for run {filename}: {str(e)[:100]}")
+                            print(f"  ⏭️  Skipping this run and continuing with the rest...")
                     else:
-                        print(f"Advertencia: No se puede calcular offsets ni RMS para el run {run_instance} porque sensor_mapping es None.")
+                        print(f"Warning: Cannot compute offsets or RMS for run {run_instance} because sensor_mapping is None.")
 
             # Construye las matrices de offsets y RMS
             if offsets_list:
-                keys = list(self.runs_by_set.keys())
-                self.offsets_data = pd.concat(offsets_list, axis=1, keys=keys)
-                self.rms_offsets_data = pd.concat(rms_list, axis=1, keys=keys)
+                # keys_for_concat aligns with each appended run matrix in offsets_list/rms_list
+                self.offsets_data = pd.concat(offsets_list, axis=1, keys=keys_for_concat)
+                self.rms_offsets_data = pd.concat(rms_list, axis=1, keys=keys_for_concat)
 
-            print("Cálculos de offsets y RMS completos.")
+            print("Offsets and RMS calculations complete.")
 
         except ValueError as e:
             print(f"Error: {e}")
-            raise RuntimeError(f"Error al calcular los offsets y errores RMS: {e}")
+            raise RuntimeError(f"Error calculating offsets and RMS errors: {e}")
         except Exception as e:
-            print(f"Error inesperado: {e}")
-            raise RuntimeError(f"Error al calcular los offsets y errores RMS: {e}")
+            print(f"Unexpected error: {e}")
+            raise RuntimeError(f"Error calculating offsets and RMS errors: {e}")
 
 
-    def offset_repeatability(self, tini=20, tend=40, save_dir="offset_repeatability_copy", selected_sets=None, ref=2):
+    def offset_repeatability(self, tini=20, tend=40, save_dir="offset_repeatability_copy", selected_sets=None, ref=2, write_csv=None, write_excel=None):
 
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
         self.global_stats = {}
+        # record skipped runs due to defective channels for auditing
+        skipped_runs_list = []
+        # record outliers filtered by IQR method
+        outliers_filtered = []
         calib_sets_to_process = self.runs_by_set.keys() if selected_sets is None else set(selected_sets)
 
         for calib_set_number in calib_sets_to_process:
             runs = self.runs_by_set.get(calib_set_number)
             if runs is None:
-                print(f"⚠️ Set {calib_set_number} no está en self.runs_by_set, se omite.")
+                print(f"WARNING: Set {calib_set_number} not in self.runs_by_set, skipping.")
                 continue
 
-            print(f"\nProcesando CalibSetNumber: {calib_set_number}")
+            print(f"\nProcessing CalibSetNumber: {calib_set_number}")
 
             filenames = list(runs.keys())
             first_run = runs[filenames[0]]
 
             if first_run.sensor_mapping is None:
-                print(f"⚠️ sensor_mapping es None para el primer run del set {calib_set_number}, se omite set.")
+                print(f"WARNING: sensor_mapping is None for the first run of set {calib_set_number}, skipping set.")
                 continue
 
             mapping = first_run.sensor_mapping
@@ -301,10 +449,10 @@ class Set:
             for ch in range(1, 15):
                 sensor_names[ch] = mapping.get(f"channel_{ch}", None)
 
-            # Determinar referencias dinámicas o fijas
+            # Determine dynamic or fixed references
             ref_channel_por_sensor = {}
 
-            red_ids = self.sensor_rojo_por_set.get(calib_set_number, [])
+            red_ids = self.sensors_raised_by_set.get(calib_set_number, [])
             if red_ids and len(red_ids) >= 2:
                 # Mapear IDs a canales
                 red_channels = []
@@ -315,18 +463,18 @@ class Set:
                             break
 
                 if len(red_channels) < 2:
-                    print(f"⚠️ No se encontraron ambos sensores rojos en el mapping para set {calib_set_number}, usando referencia fija canal {ref}.")
+                    print(f"WARNING: Could not find both raised sensors in mapping for set {calib_set_number}, using fixed reference channel {ref}.")
                     red_channels = []
             else:
                 red_channels = []
 
             if len(red_channels) == 2:
-                print(f"✅ Set {calib_set_number}: Usando referencias dinámicas desde sensores rojos en canales {red_channels}")
+                print(f"OK: Set {calib_set_number}: Using dynamic references from raised sensors in channels {red_channels}")
                 for ch in range(1, 15):
                     if sensor_names[ch] is None:
                         continue
                     if ch in red_channels:
-                        # Si es uno de los sensores rojos, usar el otro como referencia
+                        # If it's one of the raised sensors, use the other as reference
                         ref_channel_por_sensor[ch] = [r for r in red_channels if r != ch][0]
                     else:
                         # Distancia circular
@@ -337,8 +485,8 @@ class Set:
                         closest_idx = np.argmin(distances)
                         ref_channel_por_sensor[ch] = red_channels[closest_idx]
             else:
-                # Sin sensores rojos: usar canal ref fijo
-                print(f"ℹ️ Set {calib_set_number}: Usando canal fijo de referencia {ref} → Sensor ID {sensor_names.get(ref)}")
+                # No raised sensors: use fixed reference channel
+                print(f"INFO: Set {calib_set_number}: Using fixed reference channel {ref} → Sensor ID {sensor_names.get(ref)}")
                 for ch in range(1, 15):
                     if sensor_names[ch] is not None:
                         ref_channel_por_sensor[ch] = ref
@@ -361,7 +509,7 @@ class Set:
                 ref_ch = ref_channel_por_sensor[channel_num]
                 ref_sensor_id = sensor_names.get(ref_ch, "Unknown")
 
-                # Evitar duplicados entre pares de sensores rojos
+                # Avoid duplicates between raised sensor pairs
                 if channel_num in red_channels and ref_ch in red_channels:
                     if channel_num > ref_ch:
                         axes[idx].set_visible(False)
@@ -385,7 +533,38 @@ class Set:
                     run = runs[filename]
 
                     if run.sensor_mapping is None:
-                        print(f"⚠️ sensor_mapping es None para run {filename} en set {calib_set_number}, se omite run.")
+                        print(f"WARNING: sensor_mapping is None for run {filename} in set {calib_set_number}, skipping run.")
+                        continue
+
+                    # If this run detected defective channels, skip it for this sensor pair
+                    defective = getattr(run, 'defective_channels', []) or []
+                    # defective contains channel names like 'channel_8'; map sensor ids back to channel names
+                    # find the channel name(s) corresponding to sensor_id and ref_sensor_id
+                    skip_due_to_defect = False
+                    try:
+                        # find channel key for this sensor_id and ref_sensor_id
+                        channel_for_sensor = None
+                        channel_for_ref = None
+                        for ch_key, sid in run.sensor_mapping.items():
+                            if str(sid) == str(sensor_id):
+                                channel_for_sensor = ch_key
+                            if str(sid) == str(ref_sensor_id):
+                                channel_for_ref = ch_key
+                        if channel_for_sensor in defective or channel_for_ref in defective:
+                            skip_due_to_defect = True
+                    except Exception:
+                        skip_due_to_defect = False
+
+                    if skip_due_to_defect:
+                        print(f"  Skipping run {filename} for sensor {sensor_id} because defective channels detected: {defective}")
+                        # record skipped runs for auditing
+                        skipped_entry = {
+                            'CalibSetNumber': calib_set_number,
+                            'SensorID': sensor_id,
+                            'RunFilename': filename,
+                            'DefectiveChannels': ";".join(defective) if defective else ''
+                        }
+                        skipped_runs_list.append(skipped_entry)
                         continue
 
                     temperature_data = run.temperature_data
@@ -424,13 +603,70 @@ class Set:
                 valid = ~np.isnan(run_means) & ~np.isnan(run_stds) & (run_stds > 0)
 
                 if np.sum(valid) >= 2:
-                    weights = 1 / run_stds[valid] ** 2
-                    global_mean = np.average(run_means[valid], weights=weights)
-                    global_sigma = np.std(run_means[valid], ddof=1)
+                    # Filter outliers using IQR method to remove extreme values
+                    valid_means = run_means[valid]
+                    valid_stds = run_stds[valid]
+                    valid_labels = [run_labels[i] for i, v in enumerate(valid) if v]
+                    
+                    # Calculate IQR on valid means
+                    q1 = np.percentile(valid_means, 25)
+                    q3 = np.percentile(valid_means, 75)
+                    iqr = q3 - q1
+                    
+                    # Define outlier bounds (using 3*IQR for extreme outliers)
+                    lower_bound = q1 - 3 * iqr
+                    upper_bound = q3 + 3 * iqr
+                    
+                    # Filter out extreme outliers
+                    outlier_mask = (valid_means >= lower_bound) & (valid_means <= upper_bound)
+                    
+                    # Log outliers that were filtered out
+                    num_outliers = np.sum(~outlier_mask)
+                    if num_outliers > 0:
+                        print(f"  ⚠️  Filtered {num_outliers} outlier(s) for sensor channel {idx} using IQR (bounds: [{lower_bound:.2f}, {upper_bound:.2f}] mK)")
+                        for i, is_outlier in enumerate(~outlier_mask):
+                            if is_outlier:
+                                print(f"      - {valid_labels[i]}: mean={valid_means[i]:.2f} mK (outside IQR bounds)")
+                                outlier_record = {
+                                    'CalibSetNumber': calib_set_number,
+                                    'SensorID': idx,
+                                    'RunLabel': valid_labels[i],
+                                    'Mean_mK': valid_means[i],
+                                    'Std_mK': valid_stds[i],
+                                    'IQR_Lower': lower_bound,
+                                    'IQR_Upper': upper_bound,
+                                    'Reason': 'IQR_outlier'
+                                }
+                                outliers_filtered.append(outlier_record)
+                    
+                    if np.sum(outlier_mask) >= 2:
+                        # Recalculate with filtered data
+                        filtered_means = valid_means[outlier_mask]
+                        filtered_stds = valid_stds[outlier_mask]
+                        weights = 1 / filtered_stds ** 2
+                        global_mean = np.average(filtered_means, weights=weights)
+                        global_sigma = np.std(filtered_means, ddof=1)
+                    elif np.sum(outlier_mask) == 1:
+                        # Only one point remains after filtering, use it but mark sigma as NaN
+                        global_mean = valid_means[outlier_mask][0]
+                        global_sigma = np.nan
+                    else:
+                        # All points were outliers (unlikely), fall back to unfiltered calculation
+                        weights = 1 / valid_stds ** 2
+                        global_mean = np.average(valid_means, weights=weights)
+                        global_sigma = np.std(valid_means, ddof=1)
                 else:
-                    global_mean = 0
-                    global_sigma = 0
+                    # Not enough valid runs to compute a reproducibility estimate.
+                    # Use NaN so downstream aggregation and histograms can ignore these.
+                    global_mean = np.nan
+                    global_sigma = np.nan
 
+                # DEBUG: Print sigma values to identify sources of high sigmas
+                if global_sigma > 100:
+                    print(f"⚠️  HIGH SIGMA DETECTED: Set {calib_set_number}, Channel {idx}, σ={global_sigma:.2f} mK")
+                    print(f"    Valid means: {valid_means[outlier_mask] if np.sum(outlier_mask) > 0 else valid_means}")
+                    print(f"    IQR bounds: [{lower_bound:.2f}, {upper_bound:.2f}]")
+                
                 if calib_set_number not in self.global_stats:
                     self.global_stats[calib_set_number] = {}
                 self.global_stats[calib_set_number][idx] = {
@@ -441,7 +677,16 @@ class Set:
                     "run_labels": run_labels
                 }
 
-                stats_text = f"$\\mu$ = {global_mean:.3f} mK\n$\\sigma$ = {global_sigma:.3f} mK"
+                # Display 'N/A' for non-finite values to avoid 'nan' showing up on plots
+                def fmt(x):
+                    try:
+                        if x is None or (isinstance(x, float) and (np.isnan(x) or not np.isfinite(x))):
+                            return 'N/A'
+                        return f"{x:.3f}"
+                    except Exception:
+                        return 'N/A'
+
+                stats_text = f"$\\mu$ = {fmt(global_mean)} mK\n$\\sigma$ = {fmt(global_sigma)} mK"
                 axes[idx].text(
                     0.95, 0.95,
                     stats_text,
@@ -463,12 +708,12 @@ class Set:
             fig.tight_layout()
             plot_filename = os.path.join(save_dir, f"offset_repeatability_set_{calib_set_number}.png")
             fig.savefig(plot_filename)
-            print(f"Gráfico guardado en: {plot_filename}")
+            print(f"Plot saved to: {plot_filename}")
             plt.close(fig)
 
-        print("Datos globales guardados en self.global_stats")
+        print("Global data saved in self.global_stats")
 
-        # Guardar CSV resumen
+        # Save summary CSV/Excel (guarded by flags)
         csv_rows = []
         for calib_set, sensors in self.global_stats.items():
             for idx, stats in sensors.items():
@@ -485,13 +730,48 @@ class Set:
                 csv_rows.append(row)
 
         df_csv = pd.DataFrame(csv_rows)
+        # Resolve effective flags: prefer explicit args, otherwise use instance defaults
+        effective_write_csv = self.write_csv if write_csv is None else bool(write_csv)
+        effective_write_excel = self.write_excel if write_excel is None else bool(write_excel)
+
         csv_path = os.path.join(save_dir, "offset_repeatability_summary.csv")
-        df_csv.to_csv(csv_path, index=False)
-        print(f"CSV de resumen guardado en: {csv_path}")
+        if effective_write_csv:
+            df_csv.to_csv(csv_path, index=False)
+            print(f"Summary CSV saved to: {csv_path}")
+        else:
+            print("Skipping CSV write (write_csv disabled)")
+
+        # Additionally save a CSV with skipped runs due to defective channels, if any
+        try:
+            skipped_csv_path = os.path.join(save_dir, 'skipped_runs_due_to_defects.csv')
+            if 'skipped_runs_list' in locals() and skipped_runs_list:
+                pd.DataFrame(skipped_runs_list).to_csv(skipped_csv_path, index=False)
+                print(f"Skipped runs (defects) saved to: {skipped_csv_path}")
+            else:
+                print("No skipped runs due to defects were recorded.")
+        except Exception as e:
+            print(f"Warning: could not write skipped-runs CSV ({e})")
+        
+        # Save a CSV with outliers filtered by IQR method, if any
+        try:
+            outliers_csv_path = os.path.join(save_dir, 'outliers_filtered_by_iqr.csv')
+            if 'outliers_filtered' in locals() and outliers_filtered:
+                pd.DataFrame(outliers_filtered).to_csv(outliers_csv_path, index=False)
+                print(f"Outliers filtered by IQR saved to: {outliers_csv_path}")
+            else:
+                print("No outliers were filtered by IQR method.")
+        except Exception as e:
+            print(f"Warning: could not write outliers CSV ({e})")
 
         excel_path = os.path.join(save_dir, "offset_repeatability_summary.xlsx")
-        df_csv.to_excel(excel_path, index=False)
-        print(f"Excel guardado en: {excel_path}")
+        if effective_write_excel:
+            try:
+                df_csv.to_excel(excel_path, index=False)
+                print(f"Excel saved to: {excel_path}")
+            except Exception as e:
+                print(f"Warning: could not write Excel file ({e}), continuing.")
+        else:
+            print("Skipping Excel write (write_excel disabled)")
 
 
     def calculate_weighted_mean_offsets(self, selected_sets=None) -> dict:
@@ -504,7 +784,7 @@ class Set:
                   las matrices 14x14 de constantes de calibración con nombres de sensores.
         """
         try:
-            calibration_constants = {}  # Diccionario para almacenar matrices de constantes de calibración
+            calibration_constants = {}  # Dictionary to store calibration constant matrices
             calibration_errors = {}     # Diccionario para almacenar matrices de errores asociados
             
             # Filtrar conjuntos de datos si se proporciona `selected_sets`, donde seleccionamos 1 o varios del total de sets
@@ -513,9 +793,9 @@ class Set:
             for calib_set_number, runs_in_set in self.runs_by_set.items():
                 if calib_set_number not in calib_sets_to_process:
                     continue
-                print(f"\nProcesando CalibSetNumber: {calib_set_number}")
+                print(f"\nProcessing CalibSetNumber: {calib_set_number}")
 
-                # Encuentra el run con más sensores (referencia) que suele ser el primero para reordenar las matrices de ofsets si en algún run no se cumple el mismo mapping
+                # Find the run with the most sensors (reference) that is usually the first to reorder the offset matrices if in any run the same mapping does not occur
                 max_sensors = 0
                 reference_run = None
 
@@ -526,16 +806,17 @@ class Set:
                             max_sensors = num_sensors
                             reference_run = run_instance
                     else:
-                        print(f"Advertencia: sensor_mapping es None para el run {run_instance.filename}. Se omite este run.")
+                        print(f"Warning: sensor_mapping is None for run {run_instance.filename}. Skipping this run.")
 
                 if not reference_run:
-                    raise RuntimeError(f"No se encontró un run válido para calcular los offsets para el CalibSetNumber {calib_set_number}.")
+                    print(f"Warning: No valid run found to compute offsets for CalibSetNumber {calib_set_number}, skipping this set.")
+                    continue
 
-                print(f"  Run de referencia elegido: {reference_run.filename}")
-                print(f"  Sensor mapping de referencia: {reference_run.sensor_mapping}")
+                print(f"  Selected reference run: {reference_run.filename}")
+                print(f"  Reference sensor mapping: {reference_run.sensor_mapping}")
 
                 reference_sensors = list(reference_run.sensor_mapping.values())
-                print(f"  Sensores de referencia: {reference_sensors}")
+                print(f"  Reference sensors: {reference_sensors}")
 
                 # Extraer las matrices de offsets y RMS para este set
                 offsets_matrices = []
@@ -550,13 +831,13 @@ class Set:
                         offsets_df = pd.DataFrame(offsets)
                         rms_df = pd.DataFrame(rms_offsets)
 
-                        # Reordenar filas y columnas según el orden de referencia. DEMOS CALCULARLA SOLO PARA LOS ULTIMOS 20 MIN.
+                        # Reorder rows and columns according to reference order. WE SHOULD CALCULATE IT ONLY FOR THE LAST 20 MIN.
                         offsets_df = offsets_df.reindex(index=reference_sensors, columns=reference_sensors)
                         rms_df = rms_df.reindex(index=reference_sensors, columns=reference_sensors)
 
-                        print(f"  → Matriz de offsets para {run_instance.filename}:")
+                        print(f"  → Offsets matrix for {run_instance.filename}:")
                         print(offsets_df)
-                        print(f"  → Matriz de errores (RMS) para {run_instance.filename}:")
+                        print(f"  → Errors (RMS) matrix for {run_instance.filename}:")
                         print(rms_df)
 
                         offsets_matrices.append(offsets_df.values)
@@ -569,38 +850,41 @@ class Set:
                 offsets_array = np.array(offsets_matrices)  # Forma (num_runs, 14, 14)
                 rms_array = np.array(rms_matrices)          # Forma (num_runs, 14, 14)
 
-                # Crear una máscara booleana válida: excluye NaN y valores mayores a 1 en offsets
+                # Create a valid boolean mask: excludes NaN and values greater than 1 in offsets
                 valid_mask = ~np.isnan(offsets_array) & (offsets_array <= 1)
 
-                # Crear una máscara para valores válidos en RMS (excluye NaN)
+                # Create a mask for valid values in RMS (excludes NaN)
                 valid_rms_mask = ~np.isnan(rms_array)
 
-                # Máscara final combinada: valores válidos tanto en offsets como en RMS
+                # Combined final mask: valid values in both offsets and RMS
                 final_mask = valid_mask & valid_rms_mask
 
                 # Calcular los pesos como el inverso del cuadrado de los RMS
-                weights = np.zeros_like(rms_array)  # Inicializar matriz de pesos
-                weights[final_mask] = 1 / (rms_array[final_mask] ** 2)  # Calcular pesos solo donde final_mask es True
+                # Avoid division by zero: only compute weights where rms != 0
+                weights = np.zeros_like(rms_array, dtype=float)  # Inicializar matriz de pesos
+                mask_nonzero_rms = final_mask & (rms_array != 0)
+                if np.any(mask_nonzero_rms):
+                    weights[mask_nonzero_rms] = 1.0 / (rms_array[mask_nonzero_rms] ** 2)
 
                 # Calcular el numerador y el denominador de la media ponderada
                 weighted_sum = np.sum(offsets_array * weights, axis=0)  # Suma ponderada de offsets
                 total_weights = np.sum(weights, axis=0)  # Suma de los pesos
 
-                # Evitar división por cero en posiciones donde todos los pesos sean cero
+                # Avoid division by zero at positions where all weights are zero
                 with np.errstate(divide='ignore', invalid='ignore'):
                     constants_matrix = np.divide(weighted_sum, total_weights)
-                    constants_matrix[total_weights == 0] = np.nan  # Asignar NaN donde no hay datos válidos
+                    constants_matrix[total_weights == 0] = np.nan  # Assign NaN where there is no valid data
                     
-                print("\n=== CÁLCULO DE ERRORES ===")
+                print("\n=== ERROR CALCULATION ===")
                 print(f"offsets_array shape: {offsets_array.shape}")
-                print("Ejemplo de offsets_array[0]:")
-                print(offsets_array[0])  # Primer run
+                print("Example offsets_array[0]:")
+                print(offsets_array[0])  # First run
 
-                # Calcular el error asociado como la RMS de los offsets para cada posición (i, j). REVISAR. 
+                # Calculate the associated error as the RMS of offsets for each position (i, j). REVIEW. 
                 #errors_matrix = np.sqrt(np.mean(offsets_array ** 2, axis=0))
                 errors_matrix = np.std(offsets_array, axis=0, ddof=1)
                 
-                print("Matriz de errores RMS calculada (errors_matrix):")
+                print("Calculated RMS errors matrix (errors_matrix):")
                 print(errors_matrix)
 
                 # Obtener los nombres de los sensores desde el primer run
@@ -612,32 +896,39 @@ class Set:
                 errors_df = pd.DataFrame(errors_matrix, index=sensor_names, columns=sensor_names)
                 
 
-                # Imprimir matrices para depuración
-                print(f"Matriz de constantes para CalibSetNumber {calib_set_number}:")
+                # Print matrices for debugging
+                print(f"Constants matrix for CalibSetNumber {calib_set_number}:")
                 print(constants_df)
-                print(f"Matriz de errores para CalibSetNumber {calib_set_number}:")
+                print(f"Errors matrix for CalibSetNumber {calib_set_number}:")
                 print(errors_df)
 
                 # Almacenar las matrices resultantes en los diccionarios
                 calibration_constants[calib_set_number] = constants_df
                 calibration_errors[calib_set_number] = errors_df
 
-            # Guardar las matrices de calibración y errores en un archivo Excel
-            with pd.ExcelWriter('calibration_constants_and_errors.xlsx') as writer:
-                for calib_set_number in calibration_constants:
-                    # Guardar matrices de constantes de calibración
-                    constants_df = calibration_constants[calib_set_number]
-                    constants_df.to_excel(writer, sheet_name=f'CalibSet_{calib_set_number}')
+            # Save the calibration and error matrices to an Excel file only if we have content
+            if calibration_constants:
+                excel_filename = 'calibration_constants_and_errors.xlsx'
+                with pd.ExcelWriter(excel_filename) as writer:
+                    for calib_set_number in calibration_constants:
+                        # Save calibration constant matrices
+                        constants_df = calibration_constants[calib_set_number]
+                        # Use a safe sheet name
+                        sheet_name_consts = f'CalibSet_{int(calib_set_number)}'
+                        constants_df.to_excel(writer, sheet_name=sheet_name_consts)
 
-                    # Guardar matrices de errores asociados
-                    errors_df = calibration_errors[calib_set_number]
-                    errors_df.to_excel(writer, sheet_name=f'Errors_CalibSet_{calib_set_number}')
+                        # Guardar matrices de errores asociados
+                        errors_df = calibration_errors[calib_set_number]
+                        sheet_name_errors = f'Errors_CalibSet_{int(calib_set_number)}'
+                        errors_df.to_excel(writer, sheet_name=sheet_name_errors)
 
-            print("Cálculo de constantes y errores completo y guardado en 'calibration_constants_and_errors.xlsx'.")
-            return calibration_constants, calibration_errors #añado los errores
+                print(f"Calculation of constants and errors complete and saved in '{excel_filename}'.")
+            else:
+                print("No calibration constants calculated; skipping Excel export.")
+            return calibration_constants, calibration_errors  # Add the errors
 
         except Exception as e:
-            raise RuntimeError(f"Error al calcular las constantes y los errores asociados: {e}")
+            raise RuntimeError(f"Error calculating constants and associated errors: {e}")
             
 
     def plot_error_vs_distance_general(
@@ -663,13 +954,13 @@ class Set:
             mapping_order = [int(s) for s in mapping_values]
 
             if reference_selection == 'red_only':
-                red_sensors = self.sensor_rojo_por_set.get(calib_set_number, [])
+                red_sensors = self.sensors_raised_by_set.get(calib_set_number, [])
                 ref_pairs = [(r, o) for r in red_sensors if r in mapping_order for o in mapping_order if o != r]
             elif reference_selection == 'all_12':
                 ref_pairs = [(mapping_order[i], mapping_order[j]) for i in range(len(mapping_order)) for j in range(len(mapping_order)) if i != j]
             elif reference_selection == 'all_12_excl_discards':
-                sensores_excluidos = self.sensores_descartados.get(calib_set_number, [])
-                filtered_mapping = [s for s in mapping_order if s not in sensores_excluidos]
+                excluded_sensors = self.discarded_sensors.get(calib_set_number, [])
+                filtered_mapping = [s for s in mapping_order if s not in excluded_sensors]
                 if len(filtered_mapping) < 2:
                     continue
                 ref_pairs = [(filtered_mapping[i], filtered_mapping[j]) for i in range(len(filtered_mapping)) for j in range(i + 1, len(filtered_mapping))]
@@ -722,7 +1013,7 @@ class Set:
             mean_errors.append(media)
             stderr_errors.append(stderr)
 
-        # --- Función auxiliar para formatear números ---
+        # --- Auxiliary function to format numbers ---
         def format_value(value, is_mK=True):
             if pd.isna(value):
                 return "NaN"
@@ -738,7 +1029,7 @@ class Set:
                     return f"{value:.4f}"
 
         
-        ### **Gráfico 1: Dispersión**
+        ### **Plot 1: Scatter**
        
         plt.figure(figsize=(7, 5))
         plt.scatter(all_distances, all_errors, color='teal', alpha=0.5, edgecolors='black')
@@ -747,15 +1038,15 @@ class Set:
         plt.ylabel("Calibration Error (RMS, mK)" if convert_to_mK else "Calibration Error (RMS, K)", fontsize=11)
         plt.xticks(range(1, 7))
 
-        # Lógica de límite Y para Gráfico 1: Dinámico si 'all_12_excl_discards', Fijo a 5 mK si no
+        # Y limit logic for Plot 1: Dynamic if 'all_12_excl_discards', Fixed to 5 mK if not
         if reference_selection == 'all_12_excl_discards':
             if all_errors:
                 max_error = np.max(all_errors)
                 plt.ylim(0, max_error * 1.2 if max_error > 0 else (0.1 if convert_to_mK else 0.0001))
             else:
-                plt.ylim(0, 1) # Valor por defecto si no hay errores
-        else: # 'red_only' o 'all_12'
-            plt.ylim(0, 5) # Límite fijo de 5 mK
+                plt.ylim(0, 1) # Default value if no errors
+        else: # 'red_only' or 'all_12'
+            plt.ylim(0, 5) # Fixed limit of 5 mK
 
         plt.grid(True, linestyle='--', alpha=0.6)
 
@@ -767,7 +1058,7 @@ class Set:
         plt.show()
 
         
-        ### **Gráfico 2: Media y Error**
+        ### **Plot 2: Mean and Error**
         
         plt.figure(figsize=(8, 6))
         plt.errorbar(distances, mean_errors, yerr=stderr_errors, fmt='-o', color='darkorange', ecolor='gray',
@@ -786,16 +1077,16 @@ class Set:
         plt.ylabel("Mean Calibration Error (mK)" if convert_to_mK else "Mean Calibration Error (K)", fontsize=11)
         plt.xticks(distances)
 
-        # Lógica de límite Y para Gráfico 2: Dinámico si 'all_12_excl_discards', Fijo a 5 mK si no
+        # Y limit logic for Plot 2: Dynamic if 'all_12_excl_discards', Fixed to 5 mK if not
         if reference_selection == 'all_12_excl_discards':
             valid_ymax_vals = [m + s for m, s in zip(mean_errors, stderr_errors) if not (np.isnan(m) or np.isnan(s))]
             if valid_ymax_vals:
                 ymax = max(valid_ymax_vals)
                 plt.ylim(0, ymax * 1.2 if ymax > 0 else (0.1 if convert_to_mK else 0.0001))
             else:
-                plt.ylim(0, 1) # Valor por defecto
-        else: # 'red_only' o 'all_12'
-            plt.ylim(0, 5) # Límite fijo de 5 mK
+                plt.ylim(0, 1) # Default value
+        else: # 'red_only' or 'all_12'
+            plt.ylim(0, 5) # Fixed limit of 5 mK
 
         plt.grid(True, linestyle='--', alpha=0.6)
         plt.legend()
@@ -803,14 +1094,14 @@ class Set:
         plt.show()
 
         
-        ### **Gráfico 3: Histogramas**
+        ### **Plot 3: Histograms**
         
         fig, axes = plt.subplots(2, 3, figsize=(15, 8))
         axes = axes.flatten()
 
-        # Lógica de límite X para Histogramas: Dinámico si 'all_12_excl_discards', Fijo a 5 mK si no
+        # X limit logic for Histograms: Dynamic if 'all_12_excl_discards', Fixed to 5 mK if not
         if reference_selection == 'all_12_excl_discards':
-            # Calcular el máximo error observado en all_errors para ajustar el xlim superior dinámicamente
+            # Calculate the maximum error observed in all_errors to dynamically adjust the upper xlim
             if all_errors:
                 max_all_errors = np.max(all_errors)
                 if convert_to_mK:
@@ -822,9 +1113,9 @@ class Set:
             else:
                 hist_xlim_upper = 1 if convert_to_mK else 0.001
                 bin_edges_step = 0.1 if convert_to_mK else 0.0001
-        else: # 'red_only' o 'all_12'
-            hist_xlim_upper = 5 # Límite fijo de 5 mK
-            bin_edges_step = 0.5 # Paso fijo
+        else: # 'red_only' or 'all_12'
+            hist_xlim_upper = 5 # Fixed limit of 5 mK
+            bin_edges_step = 0.5 # Fixed step
 
         bin_edges = np.arange(0, hist_xlim_upper + bin_edges_step/2, bin_edges_step)
 
@@ -871,6 +1162,9 @@ class Set:
             print("Error: No se encontraron datos en self.global_stats. Primero ejecuta offset_repeatability().")
             return
 
+        # Close any existing figures to avoid residual data from previous executions
+        plt.close('all')
+        
         os.makedirs(save_dir, exist_ok=True)
 
         calib_sets = list(self.global_stats.keys())
@@ -878,7 +1172,10 @@ class Set:
             calib_sets = [cs for cs in calib_sets if cs in selected_sets]
 
         num_sets = len(calib_sets)
-        print(f"Procesando {num_sets} sets.")
+        print(f"Processing {num_sets} sets.")
+        if num_sets == 0:
+            print("No sets available to plot. Exiting plot_global_means.")
+            return
 
         num_plots = math.ceil(num_sets / max_sets_per_plot)
         chunk_size = math.ceil(num_sets / num_plots)
@@ -899,7 +1196,7 @@ class Set:
             for j, calib_set_number in enumerate(subset):
                 color = colors[j]
                 sensors_data = self.global_stats[calib_set_number]
-                descartados = set(self.sensores_descartados.get(calib_set_number, []))
+                discarded = set(self.discarded_sensors.get(calib_set_number, []))
 
                 sensor_keys = [k for k in sensors_data.keys() if isinstance(k, (int, float, str)) and str(k).isdigit()]
                 use_ids = all(int(k) >= 48000 for k in sensor_keys)
@@ -911,19 +1208,22 @@ class Set:
                     for ch in [12, 13]:
                         sensor_id_ult = channel_to_id.get(ch)
                         if sensor_id_ult is not None:
-                            descartados.add(sensor_id_ult)
+                            discarded.add(sensor_id_ult)
 
                 sensor_ids = []
                 if use_ids:
-                    sensor_ids = [str(k) for k in sensor_keys if int(k) not in descartados]
+                    sensor_ids = [str(k) for k in sensor_keys if int(k) not in discarded]
                 else:
                     for k in sensor_keys:
                         ch_index = int(k)
                         sensor_id = channel_to_id.get(ch_index, ch_index)
-                        if sensor_id not in descartados:
+                        if sensor_id not in discarded:
                             sensor_ids.append(str(k))
 
+                # Build aligned lists of sensor_names and global_means
+                sensor_names = []
                 global_means = []
+                
                 for sid in sensor_ids:
                     key = sid
                     if sid in sensors_data:
@@ -932,30 +1232,58 @@ class Set:
                         key = int(sid)
                     else:
                         continue
+                    
                     mean_val = sensors_data[key].get("mean")
-                    if mean_val is not None:
+                    
+                    # Convert masked arrays to regular values (fill masked with nan)
+                    if isinstance(mean_val, np.ma.core.MaskedConstant) or (hasattr(mean_val, 'mask') and np.ma.is_masked(mean_val)):
+                        continue  # Skip masked values entirely
+                    
+                    # Only include finite values
+                    if mean_val is not None and pd.notnull(mean_val) and np.isfinite(mean_val):
+                        # Determine sensor name - ensure it's a plain string
+                        if example_run and example_run.sensor_mapping:
+                            try:
+                                ch_index = int(sid)
+                                raw_sensor_id = example_run.sensor_mapping.get(f"channel_{ch_index+1}", f"Sensor {ch_index+1}")
+                                # Ensure raw_sensor_id is converted properly even if it's a masked value
+                                sensor_name = str(raw_sensor_id) if not (isinstance(raw_sensor_id, np.ma.core.MaskedConstant) or (hasattr(raw_sensor_id, 'mask') and np.ma.is_masked(raw_sensor_id))) else f"Sensor {ch_index+1}"
+                            except Exception:
+                                sensor_name = f"Sensor {sid}"
+                        else:
+                            sensor_name = f"Sensor {sid}"
+                        
+                        sensor_names.append(sensor_name)
                         global_means.append(mean_val)
 
                 subset_means.extend(global_means)
                 all_means.extend(global_means)
 
-                sensor_names = []
-                if example_run and example_run.sensor_mapping:
-                    for sid in sensor_ids:
-                        try:
-                            ch_index = int(sid)
-                            sensor_name = str(example_run.sensor_mapping.get(f"channel_{ch_index+1}", f"Sensor {ch_index+1}"))
-                        except Exception:
-                            sensor_name = f"Sensor {sid}"
-                        sensor_names.append(sensor_name)
-                else:
-                    sensor_names = [f"Sensor {sid}" for sid in sensor_ids]
+                # Only scatter if we have valid data
+                if global_means and sensor_names:
+                    # Debug: Check what types we have
+                    print(f"Set {calib_set_number}: len sensor_names={len(sensor_names)}, len global_means={len(global_means)}")
+                    if sensor_names:
+                        print(f"  First sensor_name: {sensor_names[0]!r} (type: {type(sensor_names[0])})")
+                        print(f"  All sensor_name types: {set(type(x).__name__ for x in sensor_names)}")
+                    if global_means:
+                        print(f"  First global_mean: {global_means[0]!r} (type: {type(global_means[0])})")
+                        print(f"  All global_mean types: {set(type(x).__name__ for x in global_means)}")
+                    
+                    plt.scatter(sensor_names, global_means, marker='o', color=color, label=f"Set {calib_set_number}")
 
-                # Scatter con color por set y etiqueta
-                plt.scatter(sensor_names, global_means, marker='o', color=color, label=f"Set {calib_set_number}")
+            # Skip this plot if no valid data was collected for any set in this subset
+            # Filter out non-finite values from subset_means
+            subset_means_array = np.array(subset_means)
+            finite_subset = subset_means_array[np.isfinite(subset_means_array)]
+            
+            if len(finite_subset) == 0:
+                plt.close()
+                print(f"Skipping plot part {i+1}: no valid finite data in sets {subset[0]:.0f} to {subset[-1]:.0f}")
+                continue
 
-            overall_mean = np.mean(subset_means) if subset_means else 0
-            overall_std = np.std(subset_means) if subset_means else 0
+            overall_mean = np.mean(finite_subset)
+            overall_std = np.std(finite_subset)
             legend_title = f"Mean: {overall_mean:.2f} mK\nStd: {overall_std:.2f} mK"
 
             plt.xlabel("Sensor ID", fontsize=14, fontweight='bold')
@@ -982,13 +1310,13 @@ class Set:
 
             plot_filename = os.path.join(save_dir, f"global_mean_offsets_part_{i+1}.png")
             plt.savefig(plot_filename, bbox_inches='tight')
-            print(f"Gráfico guardado en: {plot_filename}")
+            print(f"Plot saved to: {plot_filename}")
             plt.show()
 
 
     def plot_global_sigmas(self, save_dir="plot_global_sigmas", selected_sets=None, max_sets_per_plot=7):
         if not hasattr(self, "global_stats"):
-            print("Error: No se encontraron datos en self.global_stats. Primero ejecuta offset_repeatability().")
+            print("Error: No data found in self.global_stats. Run offset_repeatability() first.")
             return
 
         if not os.path.exists(save_dir):
@@ -999,7 +1327,11 @@ class Set:
             calib_sets = [cs for cs in calib_sets if cs in selected_sets]
 
         num_sets = len(calib_sets)
-        print(f"Procesando {num_sets} sets.")
+        print(f"Processing {num_sets} sets.")
+
+        if num_sets == 0:
+            print("No sets available to plot. Exiting plot_global_sigmas.")
+            return
 
         num_plots = math.ceil(num_sets / max_sets_per_plot)
         chunk_size = math.ceil(num_sets / num_plots)
@@ -1017,7 +1349,7 @@ class Set:
 
             for calib_set_number in subset:
                 sensors_data = self.global_stats[calib_set_number]
-                descartados = set(self.sensores_descartados.get(float(calib_set_number), []))
+                descartados = set(self.discarded_sensors.get(float(calib_set_number), []))
 
                 sensor_keys = [k for k in sensors_data.keys() if isinstance(k, (int, float, str)) and str(k).isdigit()]
                 use_ids = all(int(k) >= 48000 for k in sensor_keys)
@@ -1048,7 +1380,8 @@ class Set:
                     if sensor_id_candidato in descartados and sensor_id_candidato not in ultimos_canales_ids:
                         key_use = k if k in sensors_data else key_int
                         sigma = sensors_data[key_use].get("sigma")
-                        if sigma is not None:
+                        # only collect finite numeric sigmas (skip None, NaN and inf)
+                        if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
                             all_sigmas_descartados.append(sigma)
 
                 if use_ids:
@@ -1063,7 +1396,9 @@ class Set:
                         elif sensor_id not in descartados:
                             sensor_ids.append(str(k))
 
-                global_sigmas = []
+                # Build aligned lists of names and sigmas so x and y have same length
+                plot_names = []
+                plot_sigmas = []
                 for sid in sensor_ids:
                     key = sid
                     if sid in sensors_data:
@@ -1074,28 +1409,31 @@ class Set:
                         continue
 
                     sigma = sensors_data[key].get("sigma")
-                    if sigma is not None:
-                        global_sigmas.append(sigma)
-
-                subset_sigmas.extend(global_sigmas)
-                all_sigmas.extend(global_sigmas)
-
-                if example_run and example_run.sensor_mapping:
-                    sensor_names = []
-                    for sid in sensor_ids:
-                        try:
-                            ch_index = int(sid)
-                            sensor_name = str(example_run.sensor_mapping.get(f"channel_{ch_index+1}", f"Sensor {ch_index+1}"))
-                        except Exception:
+                    # only collect finite numeric sigmas; skip NaN/None and infinities
+                    if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
+                        # determine display name for this sensor
+                        if example_run and example_run.sensor_mapping:
+                            try:
+                                ch_index = int(sid)
+                                sensor_name = str(example_run.sensor_mapping.get(f"channel_{ch_index+1}", f"Sensor {ch_index+1}"))
+                            except Exception:
+                                sensor_name = f"Sensor {sid}"
+                        else:
                             sensor_name = f"Sensor {sid}"
-                        sensor_names.append(sensor_name)
-                else:
-                    sensor_names = [f"Sensor {sid}" for sid in sensor_ids]
 
-                plt.scatter(sensor_names, global_sigmas, marker='o')
+                        plot_names.append(sensor_name)
+                        plot_sigmas.append(sigma)
 
-            overall_sigma_mean = np.mean(subset_sigmas) if subset_sigmas else 0
-            overall_sigma_std = np.std(subset_sigmas) if subset_sigmas else 0
+                subset_sigmas.extend(plot_sigmas)
+                all_sigmas.extend(plot_sigmas)
+
+                # Scatter only the aligned pairs
+                if plot_names and plot_sigmas:
+                    plt.scatter(plot_names, plot_sigmas, marker='o')
+
+            # Use NaN-safe aggregations to avoid NaN propagation
+            overall_sigma_mean = float(np.nanmean(subset_sigmas)) if subset_sigmas else 0.0
+            overall_sigma_std = float(np.nanstd(subset_sigmas)) if subset_sigmas else 0.0
             legend_title = f"μ: {overall_sigma_mean:.2f} mK\nσ: {overall_sigma_std:.2f} mK"
 
             plt.xlabel("Sensor ID", fontsize=14, fontweight='bold')
@@ -1111,10 +1449,10 @@ class Set:
             plt.show()
 
         # =========================
-        # HISTOGRAMAS POR RONDAS (dinámico hasta 4 rondas)
+        # HISTOGRAMS BY ROUNDS (dynamic up to 4 rounds)
         # =========================
         def collect_sigmas(sets, include_descartados=False):
-            """Recolecta sigmas para un conjunto de sets."""
+            """Collects sigmas for a set of sets."""
             sigmas_list = []
             for s in sets:
                 sensors_data = self.global_stats[s]
@@ -1124,7 +1462,7 @@ class Set:
                     channel_to_id = {int(k.replace("channel_", "")) - 1: int(v) for k, v in example_run.sensor_mapping.items()}
                 ultimos_canales = [channel_to_id.get(12), channel_to_id.get(13)]
 
-                descartados = set(self.sensores_descartados.get(float(s), [])) if not include_descartados else set()
+                descartados = set(self.discarded_sensors.get(float(s), [])) if not include_descartados else set()
                 if not include_descartados:
                     if example_run and example_run.sensor_mapping:
                         for ch in [12, 13]:
@@ -1146,34 +1484,73 @@ class Set:
                             continue
 
                     sigma = sensors_data[k].get("sigma")
-                    if sigma is not None:
+                    # skip None, NaN and infinite values (these indicate insufficient/invalid data)
+                    if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
                         sigmas_list.append(sigma)
             return sigmas_list
 
         def plot_hist_rounds(include_descartados=False, filename_prefix="global_sigma_histogram_rounds"):
-            # Definir rondas
-            round1_sets = [s for s in calib_sets if 3 <= int(s) <= 48] + [s for s in calib_sets if int(s) in [59, 60, 61]]
-            round2_sets = [s for s in calib_sets if 49 <= int(s) <= 55]
-            round3_sets = [s for s in calib_sets if int(s) in [57, 62]]
-            round4_sets = [s for s in calib_sets if int(s) == 63]
+            # Build rounds from self.set_rounds if available
+            rounds_map = {}
+            if hasattr(self, "set_rounds") and self.set_rounds:
+                # invert mapping: round -> list of sets
+                for s, r in self.set_rounds.items():
+                    rounds_map.setdefault(int(r), []).append(s)
+            else:
+                # fallback to the originally coded logic
+                rounds_map = {
+                    1: [s for s in calib_sets if 3 <= int(s) <= 48] + [s for s in calib_sets if int(s) in [59, 60, 61]],
+                    2: [s for s in calib_sets if 49 <= int(s) <= 55],
+                    3: [s for s in calib_sets if int(s) in [57, 62]],
+                    4: [s for s in calib_sets if int(s) == 63],
+                }
 
-            rounds = {
-                "Round 1 (Sets 3-48,59-61)": round1_sets,
-                "Round 2 (Sets 49-55)": round2_sets,
-                "Round 3 (Sets 57,62)": round3_sets,
-                "Round 4 (Set 63)": round4_sets
-            }
-            rounds = {k: v for k, v in rounds.items() if len(v) > 0}
+            # Build human-readable labels and filter empties
+            rounds = {}
+            for rnum, sets_list in rounds_map.items():
+                if not sets_list:
+                    continue
+                # build compact label for sets_list (e.g., '3-48,59-60')
+                sorted_sets = sorted(int(x) for x in sets_list)
+                compact_parts = []
+                start = None
+                prev = None
+                for v in sorted_sets:
+                    if start is None:
+                        start = v
+                        prev = v
+                        continue
+                    if v == prev + 1:
+                        prev = v
+                        continue
+                    # close previous range
+                    if start == prev:
+                        compact_parts.append(str(start))
+                    else:
+                        compact_parts.append(f"{start}-{prev}")
+                    start = v
+                    prev = v
+                if start is not None:
+                    if start == prev:
+                        compact_parts.append(str(start))
+                    else:
+                        compact_parts.append(f"{start}-{prev}")
+
+                label = f"Round {rnum} (sets: {','.join(compact_parts)})"
+                rounds[label] = sets_list
 
             # Recoger sigmas
             rounds_sigmas = {label: collect_sigmas(sets, include_descartados) for label, sets in rounds.items()}
+            # Flatten while skipping NaN (collect_sigmas already skips NaN)
             combined_sigmas = [x for vals in rounds_sigmas.values() for x in vals]
             if not combined_sigmas:
                 return
 
-            mu_total, sigma_total = np.mean(combined_sigmas), np.std(combined_sigmas)
+            # Use numpy functions that are robust to NaN (though sigmas lists should not contain NaN)
+            mu_total = float(np.nanmean(combined_sigmas)) if combined_sigmas else 0
+            sigma_total = float(np.nanstd(combined_sigmas)) if combined_sigmas else 0
             bins = np.histogram_bin_edges(combined_sigmas, bins=12)
-            ymax = max([max(np.histogram(v, bins=bins, density=True)[0]) if v else 0 for v in rounds_sigmas.values()]) * 1.1
+            ymax = max([max(np.histogram(v, bins=bins, density=True)[0]) if (v and len(v) > 0) else 0 for v in rounds_sigmas.values()]) * 1.1
 
             # Subplots separados
             n_rounds = len(rounds_sigmas)
@@ -1186,8 +1563,11 @@ class Set:
                          fontsize=16, fontweight='bold')
 
             for ax, (label, sigmas) in zip(axes, rounds_sigmas.items()):
-                mu, sigma = np.mean(sigmas), np.std(sigmas)
-                ax.hist(sigmas, bins=bins, alpha=0.7, density=True)
+                # skip NaN in per-round stats (collect_sigmas already filtered)
+                valid_sigmas = [x for x in sigmas if pd.notnull(x)]
+                mu = float(np.nanmean(valid_sigmas)) if valid_sigmas else 0
+                sigma = float(np.nanstd(valid_sigmas)) if valid_sigmas else 0
+                ax.hist(valid_sigmas, bins=bins, alpha=0.7, density=True)
                 ax.set_title(label, fontweight='bold')
                 ax.set_xlabel("Calibration Constant Reproducibility (mK)", fontweight='bold')
                 ax.set_ylabel("Density", fontweight='bold')
@@ -1205,8 +1585,10 @@ class Set:
             fig2, ax2 = plt.subplots(figsize=(10, 6))
             colors = ["blue", "orange", "green", "red"]
             for (label, sigmas), c in zip(rounds_sigmas.items(), colors):
-                mu, sigma = np.mean(sigmas), np.std(sigmas)
-                ax2.hist(sigmas, bins=bins, alpha=0.5, color=c, density=True,
+                valid_sigmas = [x for x in sigmas if pd.notnull(x)]
+                mu = float(np.nanmean(valid_sigmas)) if valid_sigmas else 0
+                sigma = float(np.nanstd(valid_sigmas)) if valid_sigmas else 0
+                ax2.hist(valid_sigmas, bins=bins, alpha=0.5, color=c, density=True,
                          label=f"{label}\nμ={mu:.2f} mK\nσ={sigma:.2f} mK")
             ax2.set_xlabel("Calibration Constant Reproducibility (mK)", fontweight='bold')
             ax2.set_ylabel("Density", fontweight='bold')
@@ -1222,6 +1604,131 @@ class Set:
             plt.savefig(os.path.join(save_dir, f"{filename_prefix}_overlap.png"))
             plt.show()
 
-        # Ejecutar para sensores válidos y para descartados
+        # Execute for valid sensors and for discarded sensors
         plot_hist_rounds(include_descartados=False, filename_prefix="global_sigma_histogram_rounds")
         plot_hist_rounds(include_descartados=True, filename_prefix="global_sigma_histogram_rounds_all_sensors")
+
+
+def _ensure_numeric(val):
+    try:
+        return float(val)
+    except Exception:
+        return None
+
+
+def _safe_int(val):
+    try:
+        return int(float(val))
+    except Exception:
+        return None
+
+
+def plot_runs_vs_set_and_repeatability(self, output_dir="runs_vs_set_plots", include_bad_for_repeatability=True):
+    """
+    Standalone function (can be bound to a Set instance) that:
+    - Plots number of logfile rows per CalibSetNumber (bar plot)
+    - For sets with >4 rows, calls the instance method offset_repeatability including BAD runs
+
+    This is implemented as a standalone function to avoid restructuring existing class methods.
+    It expects `self` to be an instance of `Set`.
+    """
+    import matplotlib.pyplot as plt
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Coerce CalibSetNumber to numeric and keep only integer-like values (e.g., 3.0)
+    try:
+        self.logfile['CalibSetNumber'] = pd.to_numeric(self.logfile['CalibSetNumber'], errors='coerce')
+    except Exception:
+        pass
+
+    # Keep only rows where CalibSetNumber is numeric and integer-like
+    cs_numeric = pd.to_numeric(self.logfile['CalibSetNumber'], errors='coerce')
+    integer_mask = cs_numeric.notna() & (cs_numeric % 1 == 0)
+    numeric_log = self.logfile[integer_mask].copy()
+
+    # Exclude filenames that contain '_pre' for the counts as well
+    numeric_log_no_pre = numeric_log[~numeric_log['Filename'].str.contains('_pre', case=False, na=False)]
+
+    counts = numeric_log_no_pre.groupby('CalibSetNumber').size().dropna()
+    counts = counts[counts.index.notna()]
+    counts = counts.sort_index()
+
+    # Bar plot
+    plt.figure(figsize=(12, 5))
+    plt.bar([_safe_int(x) or x for x in counts.index], counts.values)
+    plt.xlabel('CalibSetNumber')
+    plt.ylabel('Number of runs (rows in logfile)')
+    plt.title('Runs per integer CalibSetNumber (excluding filenames with "_pre")')
+    plt.grid(axis='y', linestyle='--', alpha=0.6)
+    barpath = os.path.join(output_dir, 'runs_per_set.png')
+    plt.tight_layout()
+    plt.savefig(barpath)
+    plt.close()
+    print(f"Saved runs-per-set bar plot to: {barpath}")
+
+    # Identify large sets (count >= 4)
+    large_sets = [int(k) for k, v in counts.items() if v >= 4]
+    if not large_sets:
+        print("No eligible sets with 4 or more runs found after filtering.")
+        return
+
+    original_runs_by_set = getattr(self, 'runs_by_set', {}).copy()
+
+    try:
+        for cs in large_sets:
+            print(f"Preparing repeatability for set {cs} (rows={counts.loc[float(cs)]})")
+            rows = numeric_log[numeric_log['CalibSetNumber'] == float(cs)]
+            if not include_bad_for_repeatability:
+                rows = rows[rows['Selection'] != 'BAD']
+
+            # Exclude filenames that contain '_pre'
+            rows = rows[~rows['Filename'].str.contains('_pre', case=False, na=False)]
+
+            temp_runs = {}
+            for _, row in rows.iterrows():
+                fname = row['Filename']
+                try:
+                    # Skip if filename contains _pre (extra safety)
+                    if isinstance(fname, str) and '_pre' in fname.lower():
+                        print(f"  Skipping filename with _pre: {fname}")
+                        continue
+                    r = Run(fname, self.logfile)
+                    # Best-effort: try to associate sensors
+                    try:
+                        r.associate_sensors()
+                    except Exception:
+                        pass
+                    temp_runs[fname] = r
+                except Exception as e:
+                    print(f"  Warning: could not create Run for {fname}: {e}")
+
+            if not temp_runs:
+                print(f"  No valid run instances for set {cs} after filtering, skipping.")
+                continue
+
+            # Only proceed if at least 4 runs remain for this set
+            if len(temp_runs) < 4:
+                print(f"  Skipping set {cs}: only {len(temp_runs)} eligible runs after filtering")
+                continue
+
+            # Set temporary mapping and call the instance method
+            self.runs_by_set = {float(cs): temp_runs}
+            set_save_dir = os.path.join(output_dir, f"repeatability_set_{cs}")
+            try:
+                # Call offset_repeatability which will save plots inside set_save_dir
+                # set write_csv and write_excel to False so only plots are generated for now
+                self.offset_repeatability(save_dir=set_save_dir, write_csv=False, write_excel=False)
+            except Exception as e:
+                print(f"  Error while running offset_repeatability for set {cs}: {e}")
+
+    finally:
+        # restore
+        self.runs_by_set = original_runs_by_set
+
+
+# Bind the helper function as a method on the Set class for convenience
+try:
+    Set.plot_runs_vs_set_and_repeatability = plot_runs_vs_set_and_repeatability  # type: ignore
+except Exception:
+    pass
+

@@ -6,7 +6,7 @@ Short, focused guidance to help an AI coding agent become productive in this rep
 
 - Key modules:
   - `src/run.py` — Run-level loader and plotter. Important methods: `Run.load_temperature_file()`, `Run.associate_sensors()`, `Run.filter_faulty_channels()`, `Run.read_run_info()`, `Run.create_temperature_plot()` and `Run.create_offset_plot()`. Expect temperature files to be .txt files located under a CERNBox path hard-coded in `load_temperature_file()` (`/eos/user/j/jcapotor/RTDdata/`).
-  - `src/set.py` — Groups multiple `Run` instances by `CalibSetNumber`, calculates offsets and repeatability, contains project-specific mappings (`sensores_descartados`, `sensor_rojo_por_set`) and logic for reference sensor selection.
+  - `src/set.py` — Groups multiple `Run` instances by `CalibSetNumber`, calculates offsets and repeatability, contains project-specific mappings (`discarded_sensors`, `sensors_raised_by_set`) and logic for reference sensor selection.
   - `src/logfile.py` — Simple wrapper to read `LogFile.csv` and select rows; functions used by `Set` and `Run` to find sensor IDs and run metadata.
 
 - Data layout expectations:
@@ -37,7 +37,7 @@ Short, focused guidance to help an AI coding agent become productive in this rep
   - `Run.load_temperature_file()` tries multiple date/time formats and will raise if any datetime rows remain NaT. Be careful when modifying parsing logic.
   - `associate_sensors()` builds a mapping from `channel_1..channel_14` -> sensor ID strings and then renames DataFrame columns to sensor IDs. Many downstream routines expect columns labelled by sensor ID strings.
   - `Set.group_runs_by_set()` excludes filenames containing 'pre', 'st', 'lar' and rows where `Selection == 'BAD'`. Maintain these filters if changing run selection logic.
-  - `Set` contains manual per-set sensor lists (`sensores_descartados`, `sensor_rojo_por_set`) — these are authoritative for reference selection and excluded sensors. Treat them as data rather than code; prefer editing the dictionaries rather than reworking logic.
+  - `Set` contains manual per-set sensor lists (`discarded_sensors`, `sensors_raised_by_set`) — these are authoritative for reference selection and excluded sensors. Treat them as data rather than code; prefer editing the dictionaries rather than reworking logic.
 
 - Tests and static checks:
   - There are no automated tests in the repo. When adding behavior, include a minimal pytest-compatible test under `tests/` that exercises `Run.load_temperature_file()` (mocking the file path) and `Set.group_runs_by_set()` using a small DataFrame.
