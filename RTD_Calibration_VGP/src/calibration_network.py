@@ -202,3 +202,227 @@ class CalibrationNetwork:
         plt.savefig(filename, dpi=150)
         plt.close()
         logger.info(f"Graph exported to {filename}")
+
+            # ------------------------------------------------------------------
+    # CALCULO DE OFFSET ABSOLUTO HACIA SENSOR DE REFERENCIA DEL SET 57
+    # ------------------------------------------------------------------
+    def compute_offset_to_top_reference(self, sensor_id: int):
+        """
+        Calcula el offset entre cualquier sensor (de ronda 1 o 2) y el sensor de referencia
+        absoluto del set de ronda 3 (set 57). Sube el árbol acumulando offsets.
+        """
+        # --- 1. Definir la jerarquía ---
+        round_by_set = {}
+        for s, set_obj in self.sets.items():
+            if hasattr(set_obj, "set_rounds") and s in set_obj.set_rounds:
+                round_by_set[s] = set_obj.set_rounds[s]
+            else:
+                # fallback: deducir por número
+                if 3 <= s <= 39:
+                    round_by_set[s] = 1
+                elif 49 <= s <= 54:
+                    round_by_set[s] = 2
+                elif s == 57:
+                    round_by_set[s] = 3
+
+        # --- 2. Definir sensor de referencia absoluto ---
+        ref_set = 57.0
+        ref_sensors = getattr(self.sets[ref_set], "sensors_raised_by_set", {}).get(ref_set, [])
+        if not ref_sensors:
+            raise RuntimeError(f"Set 57 no tiene sensores raised definidos.")
+        ref_sensor = ref_sensors[0]  # elegimos el primero como referencia absoluta
+
+        # Guardamos el sensor de referencia para usos futuros
+        self.reference_sensor = ref_sensor
+        logger.info(f"Usando sensor de referencia absoluta {ref_sensor} del set {ref_set}")
+
+        # --- 3. Encontrar el set del sensor de entrada ---
+        set_i = self.find_sensor_set(sensor_id)
+        if set_i is None:
+            raise ValueError(f"No se encontró el set que contiene el sensor {sensor_id}")
+        if set_i == ref_set:
+            return 0.0, 0.0, [{"info": "sensor ya está en el set de referencia"}]
+
+        current_round = round_by_set.get(set_i, 1)
+        current_set = set_i
+        current_sensor = sensor_id
+        total_offset = 0.0
+        total_error2 = 0.0
+        pasos = []
+
+        # --- 4. Función auxiliar para obtener offset seguro ---
+        def safe_get(df, i, j):
+            try:
+                return df.loc[str(i), str(j)]
+            except KeyError:
+                try:
+                    return -df.loc[str(j), str(i)]
+                except KeyError:
+                    return 0.0
+
+        # --- 5. Ir subiendo ronda a ronda hasta llegar al set 57 ---
+        while current_round < 3:
+            raised = getattr(self.sets[current_set], "sensors_raised_by_set", {}).get(current_set, [])
+            if not raised:
+                raise RuntimeError(f"Set {current_set} no tiene sensores raised definidos")
+
+            bridge = raised[0]  # puente hacia siguiente ronda
+            next_set = None
+
+            # Buscar el set superior que contenga este bridge
+            for s, obj in self.sets.items():
+                if s == current_set:
+                    continue
+                if bridge in getattr(obj, "sensors_raised_by_set", {}).get(s, []):
+                    if round_by_set.get(s, 0) == current_round + 1:
+                        next_set = s
+                        break
+
+            if next_set is None:
+                raise RuntimeError(f"No se encontró set de ronda superior para {current_set} (ronda {current_round})")
+
+            df_c = getattr(self.sets[current_set], "calibration_constants", None)
+            df_e = getattr(self.sets[current_set], "calibration_errors", None)
+            off = safe_get(df_c, current_sensor, bridge)
+            err = safe_get(df_e, current_sensor, bridge) if df_e is not None else 0.0
+
+            pasos.append({
+                "from_set": current_set,
+                "to_set": next_set,
+                "from_sensor": current_sensor,
+                "bridge_sensor": bridge,
+                "offset": float(off),
+                "error": float(err),
+            })
+
+            total_offset += float(off)
+            total_error2 += float(err) ** 2
+
+            current_sensor = bridge
+            current_set = next_set
+            current_round += 1
+
+        # --- 6. Último paso: dentro del set 57 ---
+        df_c_ref = getattr(self.sets[ref_set], "calibration_constants", None)
+        df_e_ref = getattr(self.sets[ref_set], "calibration_errors", None)
+        off_final = safe_get(df_c_ref, current_sensor, ref_sensor)
+        err_final = safe_get(df_e_ref, current_sensor, ref_sensor) if df_e_ref is not None else 0.0
+
+        pasos.append({
+            "from_set": ref_set,
+            "from_sensor": current_sensor,
+            "to_sensor": ref_sensor,
+            "offset": float(off_final),
+            "error": float(err_final),
+        })
+
+        total_offset += float(off_final)
+        total_error2 += float(err_final) ** 2
+
+        return total_offset, np.sqrt(total_error2), pasos
+    
+    # ------------------------------------------------------------------
+    # RECORRIDO DE CAMINOS EN EL ÁRBOL Y PROMEDIO DE OFFSET
+    # ------------------------------------------------------------------
+    def compute_average_offset_to_reference(self, sensor_id: int):
+        """
+        Recorre todas las rutas posibles desde un sensor dado (de ronda 1 o 2)
+        hasta el sensor de referencia del set 57 y devuelve:
+          - offset medio acumulado
+          - error medio (propagado cuadráticamente)
+          - detalle de cada camino
+        """
+        if not hasattr(self, "reference_sensor"):
+            raise RuntimeError("Primero ejecuta compute_offset_to_top_reference() para definir sensor de referencia.")
+
+        ref_sensor = self.reference_sensor
+        ref_set = 57.0
+
+        set_i = self.find_sensor_set(sensor_id)
+        if set_i is None:
+            raise ValueError(f"No se encontró el set que contiene el sensor {sensor_id}")
+
+        # --- 1. Convertimos el grafo en direccional (flechas de subida) ---
+        G_up = nx.DiGraph()
+        for u, v, data in self.graph.edges(data=True):
+            round_u = 1 if 3 <= u <= 39 else (2 if 49 <= u <= 54 else 3)
+            round_v = 1 if 3 <= v <= 39 else (2 if 49 <= v <= 54 else 3)
+            if round_v == round_u + 1:
+                G_up.add_edge(u, v, **data)  # dirección hacia arriba
+            elif round_u == round_v + 1:
+                G_up.add_edge(v, u, **data)
+
+        # --- 2. Encontrar todos los caminos posibles hacia la referencia ---
+        all_paths = list(nx.all_simple_paths(G_up, source=set_i, target=ref_set))
+        if not all_paths:
+            raise RuntimeError(f"No hay camino posible entre el set {set_i} y {ref_set}")
+
+        path_results = []
+        total_offsets = []
+        total_errors2 = []
+
+        # --- 3. Evaluar cada camino ---
+        for path in all_paths:
+            total_offset = 0.0
+            total_error2 = 0.0
+            current_sensor = sensor_id
+            pasos = []
+
+            def safe_get(df, i, j):
+                try:
+                    return df.loc[str(i), str(j)]
+                except KeyError:
+                    try:
+                        return -df.loc[str(j), str(i)]
+                    except KeyError:
+                        return 0.0
+
+            for a, b in zip(path[:-1], path[1:]):
+                bridge = G_up[a][b]['sensor']
+                df_c = getattr(self.sets[a], "calibration_constants", None)
+                df_e = getattr(self.sets[a], "calibration_errors", None)
+                off = safe_get(df_c, current_sensor, bridge)
+                err = safe_get(df_e, current_sensor, bridge) if df_e is not None else 0.0
+
+                pasos.append({
+                    "from_set": a,
+                    "to_set": b,
+                    "from_sensor": current_sensor,
+                    "bridge_sensor": bridge,
+                    "offset": float(off),
+                    "error": float(err),
+                })
+
+                total_offset += float(off)
+                total_error2 += float(err) ** 2
+                current_sensor = bridge
+
+            # dentro del set 57
+            df_c_ref = getattr(self.sets[ref_set], "calibration_constants", None)
+            df_e_ref = getattr(self.sets[ref_set], "calibration_errors", None)
+            off_final = safe_get(df_c_ref, current_sensor, ref_sensor)
+            err_final = safe_get(df_e_ref, current_sensor, ref_sensor) if df_e_ref is not None else 0.0
+
+            total_offset += float(off_final)
+            total_error2 += float(err_final) ** 2
+
+            pasos.append({
+                "from_set": ref_set,
+                "from_sensor": current_sensor,
+                "to_sensor": ref_sensor,
+                "offset": float(off_final),
+                "error": float(err_final),
+            })
+
+            path_results.append({"path": path, "steps": pasos,
+                                 "offset": total_offset, "error": np.sqrt(total_error2)})
+            total_offsets.append(total_offset)
+            total_errors2.append(total_error2)
+
+        # --- 4. Calcular promedio global ---
+        avg_offset = np.mean(total_offsets)
+        avg_error = np.sqrt(np.mean(total_errors2))
+
+        return avg_offset, avg_error, path_results
+
+

@@ -6,3 +6,4 @@ RTD_Calibration_VGP/src/rtd_calibration_vgp.egg-info/SOURCES.txt
 RTD_Calibration_VGP/src/rtd_calibration_vgp.egg-info/dependency_links.txt
 RTD_Calibration_VGP/src/rtd_calibration_vgp.egg-info/requires.txt
 RTD_Calibration_VGP/src/rtd_calibration_vgp.egg-info/top_level.txt
+tests/test_config_integration.py
