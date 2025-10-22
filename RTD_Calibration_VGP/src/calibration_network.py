@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import logging
 import yaml
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, Any, Union
+from .utils import load_config, DEFAULT_CONFIG
 
 # Attempt to import networkx and provide a clear instruction if it is missing.
 try:
@@ -40,62 +41,307 @@ class CalibrationNetwork:
         - Propagate uncertainties (errors) along paths in the tree.
     """
 
-    def __init__(self, sets_dict: Dict[float, object], config_path: Optional[str] = None):
+    def __init__(self, sets_dict: Dict[float, Any], config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None) -> None:
         """
+        Initialize CalibrationNetwork with sets and configuration.
+        
         Args:
             sets_dict (dict): Dictionary {CalibSetNumber: SetObject}.
                               Each SetObject must have:
                                   - calibration_constants (DataFrame)
                                   - calibration_errors (DataFrame)
-            config_path (str): Path to the YAML file with tree definition
+            config (dict, optional): Configuration dictionary. If provided, overrides config_path.
+            config_path (str, optional): Path to the YAML file with tree definition
                                (relationships between sets, raised sensors, etc.)
         """
         self.sets = sets_dict
         self.graph = nx.Graph()
-        self.config = None
-
-        if config_path:
-            with open(config_path, "r") as f:
-                self.config = yaml.safe_load(f)
-            self._build_graph_from_config()
+        
+        # Load configuration using the same pattern as Set and Run classes
+        try:
+            if config is not None:
+                self.config = config
+            elif config_path:
+                self.config = load_config(config_path)
+            else:
+                self.config = DEFAULT_CONFIG.copy()
+        except Exception as e:
+            logger.warning(f"Could not load configuration: {e}. Using defaults.")
+            self.config = DEFAULT_CONFIG.copy()
+        
+        # Validate sets_dict
+        if not isinstance(sets_dict, dict):
+            raise TypeError("sets_dict must be a dictionary")
+        
+        if not sets_dict:
+            logger.warning("No sets provided in sets_dict")
+        
+        # Build graph from configuration
+        self._build_graph_from_config()
 
     # ------------------------------------------------------------------
     # BUILDING THE CONNECTION GRAPH BETWEEN SETS
     # ------------------------------------------------------------------
-    def _build_graph_from_config(self):
+    def _build_graph_from_config(self) -> None:
         """
-        Builds the connection graph between sets using the YAML configuration.
+        Builds the connection graph between sets using the configuration.
         Each node is a CalibSetNumber.
         Each edge connects two consecutive sets through one or more 'raised' sensors.
         """
         logger.info("Building calibration graph from configuration...")
 
-        sensors_data = self.config.get("sensors", {}).get("sets", {})
-        for set_id_str, data in sensors_data.items():
+        sets_config = self._extract_sets_configuration()
+        edges_added = self._build_graph_edges(sets_config)
+        
+        logger.info(f"Graph built with {len(self.graph.nodes)} sets and {edges_added} connections.")
+
+    def _extract_sets_configuration(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Extract sets configuration from the loaded config.
+        
+        Returns:
+            Dict[str, Dict[str, Any]]: Sets configuration dictionary
+        """
+        try:
+            # Get sensor configuration from the loaded config
+            sensors_config = self.config.get("sensors", {})
+            
+            # Try to get sets configuration (unified structure)
+            sets_config = sensors_config.get("sets", {})
+            if not sets_config:
+                # Fallback to individual dictionaries
+                raised_sensors = sensors_config.get("sensors_raised_by_set", {})
+                set_rounds = sensors_config.get("set_rounds", {})
+                
+                # Convert to sets format for processing
+                sets_config = {}
+                for set_id in raised_sensors.keys():
+                    sets_config[str(set_id)] = {
+                        "raised": raised_sensors.get(set_id, []),
+                        "round": set_rounds.get(set_id, 1)
+                    }
+            return sets_config
+        except Exception as e:
+            logger.error(f"Error processing sensor configuration: {e}")
+            return {}
+
+    def _build_graph_edges(self, sets_config: Dict[str, Dict[str, Any]]) -> int:
+        """
+        Build graph edges from sets configuration.
+        
+        Args:
+            sets_config (Dict[str, Dict[str, Any]]): Sets configuration
+            
+        Returns:
+            int: Number of edges added
+        """
+        edges_added = 0
+        for set_id_str, data in sets_config.items():
             try:
                 set_id = float(set_id_str)
-            except ValueError:
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid set ID '{set_id_str}': {e}")
                 continue
 
             round_id = data.get("round", 1)
             raised_sensors = data.get("raised", [])
 
             # Search for sets in the next level that contain any of these sensors
-            for other_id_str, other_data in sensors_data.items():
+            edges_added += self._connect_to_next_round(
+                set_id, round_id, raised_sensors, sets_config
+            )
+
+        return edges_added
+
+    def _connect_to_next_round(
+        self, 
+        set_id: float, 
+        round_id: int, 
+        raised_sensors: List[int], 
+        sets_config: Dict[str, Dict[str, Any]]
+    ) -> int:
+        """
+        Connect a set to sets in the next round.
+        
+        Args:
+            set_id (float): Current set ID
+            round_id (int): Current round number
+            raised_sensors (List[int]): Raised sensors for current set
+            sets_config (Dict[str, Dict[str, Any]]): All sets configuration
+            
+        Returns:
+            int: Number of edges added
+        """
+        edges_added = 0
+        for other_id_str, other_data in sets_config.items():
+            try:
                 other_id = float(other_id_str)
-                if other_data.get("round", 1) != round_id + 1:
-                    continue
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Invalid other set ID '{other_id_str}': {e}")
+                continue
+                
+            if other_data.get("round", 1) != round_id + 1:
+                continue
 
-                bridge_sensors = [
-                    s for s in raised_sensors
-                    if s in other_data.get("raised", []) or s in other_data.get("discarded", [])
-                ]
+            bridge_sensors = self._find_bridge_sensors(raised_sensors, other_data)
+            
+            for sensor in bridge_sensors:
+                try:
+                    self.graph.add_edge(set_id, other_id, sensor=sensor)
+                    edges_added += 1
+                except Exception as e:
+                    logger.warning(f"Failed to add edge between {set_id} and {other_id}: {e}")
 
-                if bridge_sensors:
-                    for sensor in bridge_sensors:
-                        self.graph.add_edge(set_id, other_id, sensor=sensor)
+        return edges_added
 
-        logger.info(f"Graph built with {len(self.graph.nodes)} sets and {len(self.graph.edges)} connections.")
+    def _find_bridge_sensors(
+        self, 
+        raised_sensors: List[int], 
+        other_data: Dict[str, Any]
+    ) -> List[int]:
+        """
+        Find bridge sensors between two sets.
+        
+        Args:
+            raised_sensors (List[int]): Raised sensors from current set
+            other_data (Dict[str, Any]): Other set configuration
+            
+        Returns:
+            List[int]: Bridge sensors found
+        """
+        return [
+            s for s in raised_sensors
+            if s in other_data.get("raised", []) or s in other_data.get("discarded", [])
+        ]
+
+    def _get_set_round(self, set_id: float) -> int:
+        """
+        Get the round number for a given set ID from configuration.
+        
+        Args:
+            set_id (float): Set identifier
+            
+        Returns:
+            int: Round number (defaults to 1 if not found)
+        """
+        sensors_config = self.config.get("sensors", {})
+        
+        # Try unified sets structure first
+        sets_config = sensors_config.get("sets", {})
+        if sets_config:
+            set_data = sets_config.get(str(set_id), {})
+            return set_data.get("round", 1)
+        
+        # Fallback to set_rounds dictionary
+        set_rounds = sensors_config.get("set_rounds", {})
+        return set_rounds.get(set_id, 1)
+
+    def _get_reference_sensor(self, set_id: float) -> Optional[int]:
+        """
+        Get the reference sensor for a given set ID from configuration.
+        
+        Args:
+            set_id (float): Set identifier
+            
+        Returns:
+            int or None: Reference sensor ID (first raised sensor)
+        """
+        sensors_config = self.config.get("sensors", {})
+        
+        # Try unified sets structure first
+        sets_config = sensors_config.get("sets", {})
+        if sets_config:
+            set_data = sets_config.get(str(set_id), {})
+            raised_sensors = set_data.get("raised", [])
+        else:
+            # Fallback to sensors_raised_by_set dictionary
+            raised_sensors = sensors_config.get("sensors_raised_by_set", {}).get(set_id, [])
+        
+        return raised_sensors[0] if raised_sensors else None
+
+    def get_sets_by_round(self, round_number: int) -> List[float]:
+        """
+        Get all sets that belong to a specific round.
+        
+        Args:
+            round_number (int): Round number to filter by
+            
+        Returns:
+            List[float]: List of set IDs in the specified round
+        """
+        sets_in_round = []
+        for set_id in self.sets.keys():
+            if self._get_set_round(set_id) == round_number:
+                sets_in_round.append(set_id)
+        return sorted(sets_in_round)
+
+    def get_reference_set(self) -> Optional[float]:
+        """
+        Get the reference set (typically the highest round set).
+        
+        Returns:
+            float or None: Reference set ID, or None if not found
+        """
+        if not self.sets:
+            return None
+        
+        # Find the set with the highest round number
+        max_round = 0
+        reference_set = None
+        
+        for set_id in self.sets.keys():
+            round_num = self._get_set_round(set_id)
+            if round_num > max_round:
+                max_round = round_num
+                reference_set = set_id
+        
+        return reference_set
+
+    def validate_sets_structure(self) -> Dict[str, List[str]]:
+        """
+        Validate that all sets have the required structure.
+        
+        Returns:
+            Dict[str, List[str]]: Validation results with issues found
+        """
+        issues = {
+            "missing_constants": [],
+            "missing_errors": [],
+            "missing_sets": []
+        }
+        
+        for set_id, set_obj in self.sets.items():
+            if not hasattr(set_obj, 'calibration_constants') or set_obj.calibration_constants is None:
+                issues["missing_constants"].append(str(set_id))
+            if not hasattr(set_obj, 'calibration_errors') or set_obj.calibration_errors is None:
+                issues["missing_errors"].append(str(set_id))
+        
+        return issues
+
+    @classmethod
+    def from_sets(cls, sets_list: List[Any], config: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None) -> 'CalibrationNetwork':
+        """
+        Create a CalibrationNetwork from a list of Set objects.
+        
+        Args:
+            sets_list (List): List of Set objects
+            config (dict, optional): Configuration dictionary
+            config_path (str, optional): Path to configuration file
+            
+        Returns:
+            CalibrationNetwork: New network instance
+        """
+        sets_dict = {}
+        for set_obj in sets_list:
+            # Extract set ID from the set object
+            if hasattr(set_obj, 'runs_by_set') and set_obj.runs_by_set:
+                # Get the first set ID from runs_by_set
+                set_id = list(set_obj.runs_by_set.keys())[0]
+                sets_dict[set_id] = set_obj
+            else:
+                logger.warning(f"Set object has no runs_by_set, skipping")
+        
+        return cls(sets_dict, config=config, config_path=config_path)
 
     # ------------------------------------------------------------------
     # INSPECTION AND DEBUGGING
@@ -217,20 +463,18 @@ class CalibrationNetwork:
             if hasattr(set_obj, "set_rounds") and s in set_obj.set_rounds:
                 round_by_set[s] = set_obj.set_rounds[s]
             else:
-                # fallback: deducir por número
-                if 3 <= s <= 39:
-                    round_by_set[s] = 1
-                elif 49 <= s <= 54:
-                    round_by_set[s] = 2
-                elif s == 57:
-                    round_by_set[s] = 3
+                # Use configuration-based round detection
+                round_by_set[s] = self._get_set_round(s)
 
         # --- 2. Definir sensor de referencia absoluto ---
         ref_set = 57.0
-        ref_sensors = getattr(self.sets[ref_set], "sensors_raised_by_set", {}).get(ref_set, [])
-        if not ref_sensors:
-            raise RuntimeError(f"Set 57 no tiene sensores raised definidos.")
-        ref_sensor = ref_sensors[0]  # elegimos el primero como referencia absoluta
+        ref_sensor = self._get_reference_sensor(ref_set)
+        if ref_sensor is None:
+            # Fallback to set object attributes
+            ref_sensors = getattr(self.sets[ref_set], "sensors_raised_by_set", {}).get(ref_set, [])
+            if not ref_sensors:
+                raise RuntimeError(f"Set {ref_set} no tiene sensores raised definidos.")
+            ref_sensor = ref_sensors[0]
 
         # Guardamos el sensor de referencia para usos futuros
         self.reference_sensor = ref_sensor
@@ -345,8 +589,8 @@ class CalibrationNetwork:
         # --- 1. Convertimos el grafo en direccional (flechas de subida) ---
         G_up = nx.DiGraph()
         for u, v, data in self.graph.edges(data=True):
-            round_u = 1 if 3 <= u <= 39 else (2 if 49 <= u <= 54 else 3)
-            round_v = 1 if 3 <= v <= 39 else (2 if 49 <= v <= 54 else 3)
+            round_u = self._get_set_round(u)
+            round_v = self._get_set_round(v)
             if round_v == round_u + 1:
                 G_up.add_edge(u, v, **data)  # dirección hacia arriba
             elif round_u == round_v + 1:
