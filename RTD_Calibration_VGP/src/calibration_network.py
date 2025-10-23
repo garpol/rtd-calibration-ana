@@ -76,8 +76,35 @@ class CalibrationNetwork:
         if not sets_dict:
             logger.warning("No sets provided in sets_dict")
         
+        # Normalize DataFrame indices/columns to strings for consistency
+        self._normalize_dataframe_indices()
+        
         # Build graph from configuration
         self._build_graph_from_config()
+
+    # ------------------------------------------------------------------
+    # UTILITY: NORMALIZE DATAFRAME INDICES
+    # ------------------------------------------------------------------
+    def _normalize_dataframe_indices(self) -> None:
+        """
+        Normalize all DataFrame indices and columns to strings for consistency.
+        This prevents KeyError issues when mixing int/str sensor IDs.
+        """
+        for set_id, set_obj in self.sets.items():
+            try:
+                if hasattr(set_obj, 'calibration_constants') and set_obj.calibration_constants is not None:
+                    df = set_obj.calibration_constants
+                    df.index = df.index.astype(str)
+                    df.columns = df.columns.astype(str)
+                    set_obj.calibration_constants = df
+                
+                if hasattr(set_obj, 'calibration_errors') and set_obj.calibration_errors is not None:
+                    df = set_obj.calibration_errors
+                    df.index = df.index.astype(str)
+                    df.columns = df.columns.astype(str)
+                    set_obj.calibration_errors = df
+            except Exception as e:
+                logger.warning(f"Could not normalize DataFrames for set {set_id}: {e}")
 
     # ------------------------------------------------------------------
     # BUILDING THE CONNECTION GRAPH BETWEEN SETS
@@ -137,10 +164,22 @@ class CalibrationNetwork:
         """
         edges_added = 0
         for set_id_str, data in sets_config.items():
-            try:
-                set_id = float(set_id_str)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid set ID '{set_id_str}': {e}")
+            # Keep set IDs as-is (don't force conversion to float)
+            # Try to match with keys in self.sets which could be float or str
+            set_id = None
+            for candidate in self.sets.keys():
+                if str(candidate) == str(set_id_str) or candidate == set_id_str:
+                    set_id = candidate
+                    break
+                try:
+                    if float(candidate) == float(set_id_str):
+                        set_id = candidate
+                        break
+                except (ValueError, TypeError):
+                    continue
+            
+            if set_id is None:
+                logger.debug(f"Set ID '{set_id_str}' from config not found in sets_dict, skipping")
                 continue
 
             round_id = data.get("round", 1)
@@ -155,7 +194,7 @@ class CalibrationNetwork:
 
     def _connect_to_next_round(
         self, 
-        set_id: float, 
+        set_id: Union[float, str], 
         round_id: int, 
         raised_sensors: List[int], 
         sets_config: Dict[str, Dict[str, Any]]
@@ -164,7 +203,7 @@ class CalibrationNetwork:
         Connect a set to sets in the next round.
         
         Args:
-            set_id (float): Current set ID
+            set_id (float or str): Current set ID
             round_id (int): Current round number
             raised_sensors (List[int]): Raised sensors for current set
             sets_config (Dict[str, Dict[str, Any]]): All sets configuration
@@ -174,10 +213,20 @@ class CalibrationNetwork:
         """
         edges_added = 0
         for other_id_str, other_data in sets_config.items():
-            try:
-                other_id = float(other_id_str)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Invalid other set ID '{other_id_str}': {e}")
+            # Find matching other_id in self.sets (same logic as _build_graph_edges)
+            other_id = None
+            for candidate in self.sets.keys():
+                if str(candidate) == str(other_id_str) or candidate == other_id_str:
+                    other_id = candidate
+                    break
+                try:
+                    if float(candidate) == float(other_id_str):
+                        other_id = candidate
+                        break
+                except (ValueError, TypeError):
+                    continue
+            
+            if other_id is None:
                 continue
                 
             if other_data.get("round", 1) != round_id + 1:
@@ -189,6 +238,7 @@ class CalibrationNetwork:
                 try:
                     self.graph.add_edge(set_id, other_id, sensor=sensor)
                     edges_added += 1
+                    logger.debug(f"Added edge: {set_id} ↔ {other_id} via sensor {sensor}")
                 except Exception as e:
                     logger.warning(f"Failed to add edge between {set_id} and {other_id}: {e}")
 
@@ -214,12 +264,12 @@ class CalibrationNetwork:
             if s in other_data.get("raised", []) or s in other_data.get("discarded", [])
         ]
 
-    def _get_set_round(self, set_id: float) -> int:
+    def _get_set_round(self, set_id: Union[float, str]) -> int:
         """
         Get the round number for a given set ID from configuration.
         
         Args:
-            set_id (float): Set identifier
+            set_id (float or str): Set identifier
             
         Returns:
             int: Round number (defaults to 1 if not found)
@@ -229,19 +279,38 @@ class CalibrationNetwork:
         # Try unified sets structure first
         sets_config = sensors_config.get("sets", {})
         if sets_config:
-            set_data = sets_config.get(str(set_id), {})
-            return set_data.get("round", 1)
+            # Try exact match first, then string conversion
+            for key in [set_id, str(set_id), float(set_id) if self._can_convert_to_float(set_id) else None]:
+                if key is None:
+                    continue
+                set_data = sets_config.get(str(key), {})
+                if set_data:
+                    return set_data.get("round", 1)
         
         # Fallback to set_rounds dictionary
         set_rounds = sensors_config.get("set_rounds", {})
-        return set_rounds.get(set_id, 1)
+        for key in [set_id, str(set_id), float(set_id) if self._can_convert_to_float(set_id) else None]:
+            if key is None:
+                continue
+            if key in set_rounds:
+                return set_rounds[key]
+        
+        return 1
+    
+    def _can_convert_to_float(self, value: Any) -> bool:
+        """Helper to check if a value can be converted to float."""
+        try:
+            float(value)
+            return True
+        except (ValueError, TypeError):
+            return False
 
-    def _get_reference_sensor(self, set_id: float) -> Optional[int]:
+    def _get_reference_sensor(self, set_id: Union[float, str]) -> Optional[int]:
         """
         Get the reference sensor for a given set ID from configuration.
         
         Args:
-            set_id (float): Set identifier
+            set_id (float or str): Set identifier
             
         Returns:
             int or None: Reference sensor ID (first raised sensor)
@@ -251,15 +320,28 @@ class CalibrationNetwork:
         # Try unified sets structure first
         sets_config = sensors_config.get("sets", {})
         if sets_config:
-            set_data = sets_config.get(str(set_id), {})
-            raised_sensors = set_data.get("raised", [])
-        else:
-            # Fallback to sensors_raised_by_set dictionary
-            raised_sensors = sensors_config.get("sensors_raised_by_set", {}).get(set_id, [])
+            # Try multiple key formats
+            for key in [set_id, str(set_id), float(set_id) if self._can_convert_to_float(set_id) else None]:
+                if key is None:
+                    continue
+                set_data = sets_config.get(str(key), {})
+                if set_data:
+                    raised_sensors = set_data.get("raised", [])
+                    if raised_sensors:
+                        return raised_sensors[0]
         
-        return raised_sensors[0] if raised_sensors else None
+        # Fallback to sensors_raised_by_set dictionary
+        sensors_raised = sensors_config.get("sensors_raised_by_set", {})
+        for key in [set_id, str(set_id), float(set_id) if self._can_convert_to_float(set_id) else None]:
+            if key is None:
+                continue
+            if key in sensors_raised:
+                raised_sensors = sensors_raised[key]
+                return raised_sensors[0] if raised_sensors else None
+        
+        return None
 
-    def get_sets_by_round(self, round_number: int) -> List[float]:
+    def get_sets_by_round(self, round_number: int) -> List[Union[float, str]]:
         """
         Get all sets that belong to a specific round.
         
@@ -267,20 +349,20 @@ class CalibrationNetwork:
             round_number (int): Round number to filter by
             
         Returns:
-            List[float]: List of set IDs in the specified round
+            List[Union[float, str]]: List of set IDs in the specified round
         """
         sets_in_round = []
         for set_id in self.sets.keys():
             if self._get_set_round(set_id) == round_number:
                 sets_in_round.append(set_id)
-        return sorted(sets_in_round)
+        return sorted(sets_in_round, key=lambda x: (float(x) if self._can_convert_to_float(x) else str(x)))
 
-    def get_reference_set(self) -> Optional[float]:
+    def get_reference_set(self) -> Optional[Union[float, str]]:
         """
         Get the reference set (typically the highest round set).
         
         Returns:
-            float or None: Reference set ID, or None if not found
+            Union[float, str] or None: Reference set ID, or None if not found
         """
         if not self.sets:
             return None
@@ -294,6 +376,10 @@ class CalibrationNetwork:
             if round_num > max_round:
                 max_round = round_num
                 reference_set = set_id
+        
+        if reference_set is None:
+            logger.warning("No reference set found; returning first set as fallback")
+            reference_set = list(self.sets.keys())[0] if self.sets else None
         
         return reference_set
 
@@ -366,14 +452,18 @@ class CalibrationNetwork:
             logger.warning(f"No path exists between {set_a} and {set_b}")
             return []
 
-    def find_sensor_set(self, sensor_id: int) -> Optional[float]:
+    def find_sensor_set(self, sensor_id: int) -> Optional[Union[float, str]]:
         """
         Locates which set a sensor belongs to.
+        Checks both numeric and string indices in calibration_constants.
         """
+        sensor_str = str(sensor_id)
         for set_num, set_obj in self.sets.items():
             constants = getattr(set_obj, "calibration_constants", None)
-            if constants is not None and sensor_id in constants.index:
-                return set_num
+            if constants is not None:
+                # Check if sensor exists in index (now normalized to str)
+                if sensor_str in constants.index or sensor_id in constants.index:
+                    return set_num
         return None
 
     # ------------------------------------------------------------------
@@ -392,8 +482,20 @@ class CalibrationNetwork:
 
         if set_i == set_j:
             set_obj = self.sets[set_i]
-            d = set_obj.calibration_constants.loc[sensor_i, sensor_j]
-            e = set_obj.calibration_errors.loc[sensor_i, sensor_j]
+            # Use string indices for DataFrame access
+            si_str = str(sensor_i)
+            sj_str = str(sensor_j)
+            try:
+                d = set_obj.calibration_constants.loc[si_str, sj_str]
+                e = set_obj.calibration_errors.loc[si_str, sj_str]
+            except KeyError:
+                # Try inverse
+                try:
+                    d = -set_obj.calibration_constants.loc[sj_str, si_str]
+                    e = set_obj.calibration_errors.loc[sj_str, si_str]
+                except KeyError:
+                    logger.warning(f"Could not find offset between {sensor_i} and {sensor_j} in set {set_i}")
+                    d, e = 0.0, 0.0
             return d, e
 
         # Find path of sets
@@ -409,13 +511,24 @@ class CalibrationNetwork:
             setA = self.sets[a]
             setB = self.sets[b]
 
+            # Use string indices
+            si_str = str(sensor_i)
+            sb_str = str(sensor_bridge)
+            sj_str = str(sensor_j)
+
             # offset A→bridge
-            dA = setA.calibration_constants.loc[sensor_i, sensor_bridge] if sensor_i in setA.calibration_constants.index and sensor_bridge in setA.calibration_constants.columns else 0
-            eA = setA.calibration_errors.loc[sensor_i, sensor_bridge] if sensor_i in setA.calibration_errors.index and sensor_bridge in setA.calibration_errors.columns else 0
+            dA = 0.0
+            eA = 0.0
+            if si_str in setA.calibration_constants.index and sb_str in setA.calibration_constants.columns:
+                dA = setA.calibration_constants.loc[si_str, sb_str]
+                eA = setA.calibration_errors.loc[si_str, sb_str] if hasattr(setA, 'calibration_errors') and setA.calibration_errors is not None else 0.0
 
             # offset bridge→B
-            dB = setB.calibration_constants.loc[sensor_bridge, sensor_j] if sensor_j in setB.calibration_constants.columns and sensor_bridge in setB.calibration_constants.index else 0
-            eB = setB.calibration_errors.loc[sensor_bridge, sensor_j] if sensor_j in setB.calibration_errors.columns and sensor_bridge in setB.calibration_errors.index else 0
+            dB = 0.0
+            eB = 0.0
+            if sj_str in setB.calibration_constants.columns and sb_str in setB.calibration_constants.index:
+                dB = setB.calibration_constants.loc[sb_str, sj_str]
+                eB = setB.calibration_errors.loc[sb_str, sj_str] if hasattr(setB, 'calibration_errors') and setB.calibration_errors is not None else 0.0
 
             total_offset += dA + dB
             total_error2 += eA**2 + eB**2
@@ -450,12 +563,19 @@ class CalibrationNetwork:
         logger.info(f"Graph exported to {filename}")
 
             # ------------------------------------------------------------------
-    # CALCULO DE OFFSET ABSOLUTO HACIA SENSOR DE REFERENCIA DEL SET 57
+    # CALCULO DE OFFSET ABSOLUTO HACIA SENSOR DE REFERENCIA DEL SET DE MAYOR RONDA
     # ------------------------------------------------------------------
-    def compute_offset_to_top_reference(self, sensor_id: int):
+    def compute_offset_to_top_reference(self, sensor_id: int, ref_set: Optional[Union[float, str]] = None):
         """
         Calcula el offset entre cualquier sensor (de ronda 1 o 2) y el sensor de referencia
-        absoluto del set de ronda 3 (set 57). Sube el árbol acumulando offsets.
+        absoluto del set de referencia (ronda más alta). Sube el árbol acumulando offsets.
+        
+        Args:
+            sensor_id (int): ID del sensor cuyo offset se quiere calcular
+            ref_set (float or str, optional): Set de referencia. Si None, usa get_reference_set()
+        
+        Returns:
+            Tuple[float, float, List[dict]]: (offset_total, error_total, pasos_detallados)
         """
         # --- 1. Definir la jerarquía ---
         round_by_set = {}
@@ -467,27 +587,40 @@ class CalibrationNetwork:
                 round_by_set[s] = self._get_set_round(s)
 
         # --- 2. Definir sensor de referencia absoluto ---
-        ref_set = 57.0
+        if ref_set is None:
+            ref_set = self.get_reference_set()
+            if ref_set is None:
+                raise RuntimeError("No se pudo determinar el set de referencia (ningún set con ronda máxima)")
+        
+        if ref_set not in self.sets:
+            raise RuntimeError(f"Set de referencia {ref_set} no está en sets_dict")
+        
         ref_sensor = self._get_reference_sensor(ref_set)
         if ref_sensor is None:
             # Fallback to set object attributes
-            ref_sensors = getattr(self.sets[ref_set], "sensors_raised_by_set", {}).get(ref_set, [])
-            if not ref_sensors:
-                raise RuntimeError(f"Set {ref_set} no tiene sensores raised definidos.")
-            ref_sensor = ref_sensors[0]
+            if hasattr(self.sets[ref_set], "sensors_raised_by_set"):
+                ref_sensors = getattr(self.sets[ref_set], "sensors_raised_by_set", {}).get(ref_set, [])
+                if ref_sensors:
+                    ref_sensor = ref_sensors[0]
+            
+            if ref_sensor is None:
+                raise RuntimeError(f"Set {ref_set} no tiene sensores raised definidos en la configuración.")
 
         # Guardamos el sensor de referencia para usos futuros
         self.reference_sensor = ref_sensor
-        logger.info(f"Usando sensor de referencia absoluta {ref_sensor} del set {ref_set}")
+        self.reference_set = ref_set
+        logger.info(f"Usando sensor de referencia absoluta {ref_sensor} del set {ref_set} (ronda {round_by_set.get(ref_set, '?')})")
 
         # --- 3. Encontrar el set del sensor de entrada ---
         set_i = self.find_sensor_set(sensor_id)
         if set_i is None:
             raise ValueError(f"No se encontró el set que contiene el sensor {sensor_id}")
         if set_i == ref_set:
-            return 0.0, 0.0, [{"info": "sensor ya está en el set de referencia"}]
+            logger.info(f"Sensor {sensor_id} ya está en el set de referencia {ref_set}")
+            return 0.0, 0.0, [{"info": f"sensor {sensor_id} ya está en el set de referencia"}]
 
         current_round = round_by_set.get(set_i, 1)
+        ref_round = round_by_set.get(ref_set, 3)
         current_set = set_i
         current_sensor = sensor_id
         total_offset = 0.0
@@ -496,19 +629,34 @@ class CalibrationNetwork:
 
         # --- 4. Función auxiliar para obtener offset seguro ---
         def safe_get(df, i, j):
+            if df is None:
+                return 0.0
             try:
                 return df.loc[str(i), str(j)]
             except KeyError:
                 try:
                     return -df.loc[str(j), str(i)]
                 except KeyError:
+                    logger.warning(f"No se encontró offset entre {i} y {j} en la matriz")
                     return 0.0
 
-        # --- 5. Ir subiendo ronda a ronda hasta llegar al set 57 ---
-        while current_round < 3:
-            raised = getattr(self.sets[current_set], "sensors_raised_by_set", {}).get(current_set, [])
+        # --- 5. Ir subiendo ronda a ronda hasta llegar al set de referencia ---
+        max_iterations = 10  # Evitar loops infinitos
+        iteration = 0
+        while current_round < ref_round and iteration < max_iterations:
+            iteration += 1
+            
+            # Obtener sensores raised del set actual
+            raised = None
+            if hasattr(self.sets[current_set], "sensors_raised_by_set"):
+                raised = getattr(self.sets[current_set], "sensors_raised_by_set", {}).get(current_set, [])
+            
             if not raised:
-                raise RuntimeError(f"Set {current_set} no tiene sensores raised definidos")
+                # Try config
+                raised = self.config.get("sensors", {}).get("sets", {}).get(str(current_set), {}).get("raised", [])
+            
+            if not raised:
+                raise RuntimeError(f"Set {current_set} (ronda {current_round}) no tiene sensores raised definidos")
 
             bridge = raised[0]  # puente hacia siguiente ronda
             next_set = None
@@ -517,13 +665,25 @@ class CalibrationNetwork:
             for s, obj in self.sets.items():
                 if s == current_set:
                     continue
-                if bridge in getattr(obj, "sensors_raised_by_set", {}).get(s, []):
+                
+                # Check if bridge is in raised sensors of this set
+                raised_next = None
+                if hasattr(obj, "sensors_raised_by_set"):
+                    raised_next = getattr(obj, "sensors_raised_by_set", {}).get(s, [])
+                
+                if not raised_next:
+                    raised_next = self.config.get("sensors", {}).get("sets", {}).get(str(s), {}).get("raised", [])
+                
+                if bridge in raised_next:
                     if round_by_set.get(s, 0) == current_round + 1:
                         next_set = s
                         break
 
             if next_set is None:
-                raise RuntimeError(f"No se encontró set de ronda superior para {current_set} (ronda {current_round})")
+                raise RuntimeError(
+                    f"No se encontró set de ronda {current_round + 1} que contenga el sensor puente {bridge} "
+                    f"(desde set {current_set}, ronda {current_round})"
+                )
 
             df_c = getattr(self.sets[current_set], "calibration_constants", None)
             df_e = getattr(self.sets[current_set], "calibration_errors", None)
@@ -546,7 +706,10 @@ class CalibrationNetwork:
             current_set = next_set
             current_round += 1
 
-        # --- 6. Último paso: dentro del set 57 ---
+        if iteration >= max_iterations:
+            raise RuntimeError(f"Excedido número máximo de iteraciones ({max_iterations}) al subir el árbol")
+
+        # --- 6. Último paso: dentro del set de referencia ---
         df_c_ref = getattr(self.sets[ref_set], "calibration_constants", None)
         df_e_ref = getattr(self.sets[ref_set], "calibration_errors", None)
         off_final = safe_get(df_c_ref, current_sensor, ref_sensor)
@@ -568,19 +731,31 @@ class CalibrationNetwork:
     # ------------------------------------------------------------------
     # RECORRIDO DE CAMINOS EN EL ÁRBOL Y PROMEDIO DE OFFSET
     # ------------------------------------------------------------------
-    def compute_average_offset_to_reference(self, sensor_id: int):
+    def compute_average_offset_to_reference(self, sensor_id: int, ref_set: Optional[Union[float, str]] = None):
         """
         Recorre todas las rutas posibles desde un sensor dado (de ronda 1 o 2)
-        hasta el sensor de referencia del set 57 y devuelve:
+        hasta el sensor de referencia del set de mayor ronda y devuelve:
           - offset medio acumulado
           - error medio (propagado cuadráticamente)
           - detalle de cada camino
+        
+        Args:
+            sensor_id (int): ID del sensor
+            ref_set (float or str, optional): Set de referencia. Si None, usa el guardado en self.reference_set
+        
+        Returns:
+            Tuple[float, float, List[dict]]: (offset_promedio, error_promedio, caminos_detallados)
         """
-        if not hasattr(self, "reference_sensor"):
-            raise RuntimeError("Primero ejecuta compute_offset_to_top_reference() para definir sensor de referencia.")
+        if ref_set is None:
+            if not hasattr(self, "reference_sensor") or not hasattr(self, "reference_set"):
+                # Compute it first
+                logger.info("compute_average_offset_to_reference: calculando referencia automáticamente...")
+                self.compute_offset_to_top_reference(sensor_id, ref_set=None)
+            ref_set = self.reference_set
 
-        ref_sensor = self.reference_sensor
-        ref_set = 57.0
+        ref_sensor = self.reference_sensor if hasattr(self, "reference_sensor") else self._get_reference_sensor(ref_set)
+        if ref_sensor is None:
+            raise RuntimeError("No se pudo determinar el sensor de referencia")
 
         set_i = self.find_sensor_set(sensor_id)
         if set_i is None:
