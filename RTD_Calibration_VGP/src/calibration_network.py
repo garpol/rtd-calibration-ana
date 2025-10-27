@@ -800,6 +800,294 @@ class CalibrationNetwork:
         return total_offset, np.sqrt(total_error2)
 
     # ------------------------------------------------------------------
+    # CALIBRATION CHAIN METHODS
+    # ------------------------------------------------------------------
+    def build_calibration_chain(
+        self,
+        sensor_id: int,
+        logfile_df: pd.DataFrame,
+        verbose: bool = True
+    ) -> List[Tuple[int, int, int]]:
+        """
+        Construye la cadena de calibración completa para un sensor dado,
+        siguiendo los sensores 'raised' desde ronda 1 hasta la ronda máxima.
+        
+        Args:
+            sensor_id: ID del sensor inicial (típicamente de Ronda 1)
+            logfile_df: DataFrame del LogFile con información de runs y sensores
+            verbose: Si True, imprime información detallada del proceso
+            
+        Returns:
+            List[Tuple[int, int, int]]: Lista de (sensor_id, set_id, round_num)
+            representando la cadena completa desde R1 hasta Rmax
+            
+        Example:
+            >>> chain = net.build_calibration_chain(48203, logfile.log_file)
+            >>> # Returns: [(48203, 3, 1), (48203, 49, 2), (48484, 57, 3)]
+        """
+        chain = []
+        
+        if verbose:
+            print(f"\n🔗 Construyendo cadena de calibración para sensor {sensor_id}")
+        
+        # 1. Encontrar en qué set de R1 está el sensor
+        current_set = None
+        current_round = 1
+        
+        for set_id in logfile_df['CalibSetNumber'].dropna().unique():
+            try:
+                set_id_int = int(float(set_id))
+            except Exception:
+                continue
+            
+            # Verificar la ronda del set
+            if set_id_int not in self.sets:
+                continue
+            
+            try:
+                round_num = self._get_set_round(set_id_int)
+            except Exception:
+                continue
+            
+            if round_num != 1:
+                continue
+            
+            # Buscar el sensor en las columnas S1-S20 del logfile
+            set_rows = logfile_df[logfile_df['CalibSetNumber'] == set_id]
+            if set_rows.empty:
+                continue
+            
+            # Extraer valores de sensores de todas las columnas S1-S20
+            sensor_values = []
+            for col in [f'S{i}' for i in range(1, 21)]:
+                if col in set_rows.columns:
+                    vals = set_rows[col].dropna().values
+                    sensor_values.extend(vals)
+            
+            # Convertir a int para comparar
+            sensor_values_int = []
+            for val in sensor_values:
+                try:
+                    sensor_values_int.append(int(float(val)))
+                except Exception:
+                    pass
+            
+            if sensor_id in sensor_values_int:
+                current_set = set_id_int
+                break
+        
+        if current_set is None:
+            if verbose:
+                print(f"   ⚠️ No se encontró el sensor {sensor_id} en ningún set de Ronda 1")
+            return chain
+        
+        if verbose:
+            print(f"   ✅ Sensor {sensor_id} encontrado en Set {current_set} (Ronda {current_round})")
+        
+        # Agregar el primer paso de la cadena
+        chain.append((sensor_id, current_set, current_round))
+        
+        # 2. Seguir la cadena de sensores raised hasta llegar a la ronda máxima
+        while True:
+            # Obtener sensores raised del set actual desde config
+            if current_set not in self.config.get('sensors', {}).get('sets', {}):
+                if verbose:
+                    print(f"   ⚠️ Set {current_set} no tiene configuración de sensores raised")
+                break
+            
+            set_config = self.config['sensors']['sets'][current_set]
+            raised_sensors = set_config.get('raised', [])
+            
+            if not raised_sensors:
+                if verbose:
+                    print(f"   ℹ️ Set {current_set} no tiene sensores raised (ronda máxima alcanzada)")
+                break
+            
+            # Tomar el primer sensor raised
+            raised_sensor = raised_sensors[0]
+            next_round = current_round + 1
+            
+            if verbose:
+                print(f"   🔸 Sensor raised: {raised_sensor} → buscando en Ronda {next_round}")
+            
+            # Buscar en qué set de la siguiente ronda está este sensor raised
+            next_set = None
+            found = False
+            
+            for set_id in logfile_df['CalibSetNumber'].dropna().unique():
+                try:
+                    set_id_int = int(float(set_id))
+                except Exception:
+                    continue
+                
+                if set_id_int not in self.sets:
+                    continue
+                
+                try:
+                    round_num = self._get_set_round(set_id_int)
+                except Exception:
+                    continue
+                
+                if round_num != next_round:
+                    continue
+                
+                # Buscar raised_sensor en este set
+                set_rows = logfile_df[logfile_df['CalibSetNumber'] == set_id]
+                if set_rows.empty:
+                    continue
+                
+                sensor_values = []
+                for col in [f'S{i}' for i in range(1, 21)]:
+                    if col in set_rows.columns:
+                        vals = set_rows[col].dropna().values
+                        sensor_values.extend(vals)
+                
+                sensor_values_int = []
+                for val in sensor_values:
+                    try:
+                        sensor_values_int.append(int(float(val)))
+                    except Exception:
+                        pass
+                
+                if raised_sensor in sensor_values_int:
+                    next_set = set_id_int
+                    found = True
+                    break
+            
+            if not found:
+                if verbose:
+                    print(f"   ⚠️ No se encontró set de Ronda {next_round} para sensor raised {raised_sensor}")
+                break
+            
+            if verbose:
+                print(f"   ✅ Sensor raised {raised_sensor} encontrado en Set {next_set} (Ronda {next_round})")
+            
+            # Obtener el primer sensor del mapping del siguiente set (será la referencia)
+            set_rows_next = logfile_df[logfile_df['CalibSetNumber'] == next_set]
+            if not set_rows_next.empty:
+                first_sensor = None
+                for col in [f'S{i}' for i in range(1, 21)]:
+                    if col in set_rows_next.columns:
+                        val = set_rows_next[col].dropna().values
+                        if len(val) > 0:
+                            try:
+                                first_sensor = int(float(val[0]))
+                                break
+                            except Exception:
+                                pass
+                
+                if first_sensor is not None:
+                    if verbose:
+                        print(f"      📍 Primer sensor de Set {next_set}: {first_sensor} (referencia)")
+                    chain.append((first_sensor, next_set, next_round))
+                else:
+                    chain.append((raised_sensor, next_set, next_round))
+            else:
+                chain.append((raised_sensor, next_set, next_round))
+            
+            current_set = next_set
+            current_round = next_round
+        
+        if verbose:
+            print(f"\n📋 CADENA COMPLETA ({len(chain)} pasos):")
+            for i, (sens, s, r) in enumerate(chain):
+                arrow = " → " if i < len(chain) - 1 else ""
+                ref_mark = " 🎯 REFERENCIA ABSOLUTA" if i == len(chain) - 1 else ""
+                print(f"   {i+1}. Sensor {sens} en Set {s} (Ronda {r}){ref_mark}{arrow}")
+        
+        return chain
+    
+    def calculate_offset_from_chain(
+        self,
+        chain: List[Tuple[int, int, int]],
+        verbose: bool = True
+    ) -> Tuple[Optional[float], Optional[float], Dict]:
+        """
+        Calcula el offset total y error propagado a través de una cadena de calibración.
+        
+        Estrategia:
+        - Usa compute_offset_between() que maneja automáticamente paths en el grafo
+        - Acumula offsets paso a paso desde R1 hasta Rmax
+        - Propaga errores cuadráticamente
+        
+        Args:
+            chain: Lista de (sensor_id, set_id, round_num) desde R1 hasta Rmax
+            verbose: Si True, imprime información detallada
+            
+        Returns:
+            tuple: (offset_total, error_total, detalles_dict)
+            
+        Example:
+            >>> chain = net.build_calibration_chain(48203, logfile.log_file)
+            >>> offset, error, details = net.calculate_offset_from_chain(chain)
+        """
+        if len(chain) < 2:
+            if verbose:
+                print("⚠️ Cadena muy corta (necesita al menos 2 elementos)")
+            return None, None, {}
+        
+        offset_total = 0.0
+        error_sq_sum = 0.0
+        detalles = {}
+        
+        if verbose:
+            print(f"\n🔗 Calculando offsets para cadena de {len(chain)} pasos:")
+        
+        # Calcular offset entre cada par consecutivo
+        for i in range(len(chain) - 1):
+            sensor_from = str(chain[i][0])  # Convertir a string para compute_offset_between
+            sensor_to = str(chain[i+1][0])
+            set_from = chain[i][1]
+            set_to = chain[i+1][1]
+            round_from = chain[i][2]
+            round_to = chain[i+1][2]
+            
+            if verbose:
+                print(f"\n   Paso {i+1}: Ronda {round_from} → Ronda {round_to}")
+                print(f"      Sensor {sensor_from} (Set {set_from}) → Sensor {sensor_to} (Set {set_to})")
+            
+            try:
+                # Usar compute_offset_between que maneja paths en el grafo
+                offset, error = self.compute_offset_between(sensor_from, sensor_to)
+                
+                if verbose:
+                    print(f"      📊 Offset: {offset:.6f} ± {error:.6f}")
+                
+                detalles[f'step_{i+1}'] = {
+                    'sensor_from': sensor_from,
+                    'sensor_to': sensor_to,
+                    'set_from': set_from,
+                    'set_to': set_to,
+                    'round_from': round_from,
+                    'round_to': round_to,
+                    'offset': offset,
+                    'error': error
+                }
+                
+                offset_total += offset
+                error_sq_sum += error**2
+                
+            except Exception as e:
+                if verbose:
+                    print(f"      ⚠️ Error calculando offset: {e}")
+                return None, None, detalles
+        
+        error_total = np.sqrt(error_sq_sum)
+        detalles['total'] = {
+            'offset': offset_total,
+            'error': error_total,
+            'steps': len(chain) - 1
+        }
+        
+        if verbose:
+            print(f"\n🎯 RESULTADO FINAL:")
+            print(f"   Offset Total: {offset_total:.6f}")
+            print(f"   Error Total:  {error_total:.6f}")
+            print(f"   Expresión: {offset_total:.6f} ± {error_total:.6f}")
+        
+        return offset_total, error_total, detalles
+
+    # ------------------------------------------------------------------
     # UTILITIES
     # ------------------------------------------------------------------
     def export_graph(self, filename="calibration_graph.png"):
