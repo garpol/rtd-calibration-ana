@@ -1087,6 +1087,355 @@ class CalibrationNetwork:
         
         return offset_total, error_total, detalles
 
+    def compute_weighted_offset_all_paths(
+        self,
+        sensor_id: int,
+        logfile_df: pd.DataFrame,
+        verbose: bool = True
+    ) -> Tuple[Optional[float], Optional[float], Dict]:
+        """
+        Calcula el offset ponderado usando TODOS los caminos posibles a través
+        de TODOS los sensores 'raised' disponibles.
+        
+        Estrategia:
+        1. Genera todas las cadenas posibles (cada sensor raised es un camino)
+        2. Calcula offset y error para cada camino
+        3. Identifica el camino con menor error
+        4. Calcula media ponderada de todos los offsets usando error como peso
+        
+        Media ponderada:
+            - Peso: w_i = 1 / error_i²
+            - Offset final: Σ(offset_i * w_i) / Σ(w_i)
+            - Error final: 1 / √(Σw_i)
+        
+        Args:
+            sensor_id: ID del sensor inicial (típicamente de Ronda 1)
+            logfile_df: DataFrame del LogFile con información de runs y sensores
+            verbose: Si True, imprime información detallada del proceso
+            
+        Returns:
+            tuple: (offset_weighted, error_weighted, info_dict)
+            
+            info_dict contiene:
+                - 'paths': Lista de todos los caminos calculados
+                - 'best_path': Camino con menor error
+                - 'n_paths': Número total de caminos encontrados
+                - 'weights': Pesos calculados para cada camino
+                
+        Example:
+            >>> offset, error, info = net.compute_weighted_offset_all_paths(
+            ...     48203, logfile.log_file, verbose=True
+            ... )
+            >>> print(f"Caminos disponibles: {info['n_paths']}")
+            >>> print(f"Mejor camino: {info['best_path']['chain']}")
+        """
+        if verbose:
+            print("\n" + "="*80)
+            print("🌐 CÁLCULO DE OFFSET PONDERADO POR TODOS LOS CAMINOS POSIBLES")
+            print("="*80)
+            print(f"\n🔍 Sensor de partida: {sensor_id}")
+        
+        # 1. Encontrar el set de R1 del sensor
+        current_set = None
+        for set_id in logfile_df['CalibSetNumber'].dropna().unique():
+            try:
+                set_id_int = int(float(set_id))
+            except Exception:
+                continue
+            
+            if set_id_int not in self.sets:
+                continue
+            
+            try:
+                round_num = self._get_set_round(set_id_int)
+            except Exception:
+                continue
+            
+            if round_num != 1:
+                continue
+            
+            set_rows = logfile_df[logfile_df['CalibSetNumber'] == set_id]
+            if set_rows.empty:
+                continue
+            
+            sensor_values = []
+            for col in [f'S{i}' for i in range(1, 21)]:
+                if col in set_rows.columns:
+                    vals = set_rows[col].dropna().values
+                    sensor_values.extend(vals)
+            
+            sensor_values_int = []
+            for val in sensor_values:
+                try:
+                    sensor_values_int.append(int(float(val)))
+                except Exception:
+                    pass
+            
+            if sensor_id in sensor_values_int:
+                current_set = set_id_int
+                break
+        
+        if current_set is None:
+            if verbose:
+                print(f"   ⚠️ No se encontró el sensor {sensor_id} en ningún set de Ronda 1")
+            return None, None, {}
+        
+        if verbose:
+            print(f"   ✅ Sensor encontrado en Set {current_set} (Ronda 1)")
+        
+        # 2. Obtener TODOS los sensores raised del set
+        if current_set not in self.config.get('sensors', {}).get('sets', {}):
+            if verbose:
+                print(f"   ⚠️ Set {current_set} no tiene configuración")
+            return None, None, {}
+        
+        set_config = self.config['sensors']['sets'][current_set]
+        all_raised_sensors = set_config.get('raised', [])
+        
+        if not all_raised_sensors:
+            if verbose:
+                print(f"   ⚠️ Set {current_set} no tiene sensores raised")
+            return None, None, {}
+        
+        if verbose:
+            print(f"\n📋 Sensores 'raised' disponibles en Set {current_set}: {all_raised_sensors}")
+            print(f"   Total de caminos potenciales: {len(all_raised_sensors)}")
+        
+        # 3. Construir cadena para CADA sensor raised (un camino por cada uno)
+        all_paths = []
+        
+        for idx, raised_sensor in enumerate(all_raised_sensors, 1):
+            if verbose:
+                print(f"\n🛤️  CAMINO {idx}/{len(all_raised_sensors)}: Usando sensor raised {raised_sensor}")
+            
+            # Construir cadena forzando el uso de este sensor raised específico
+            chain = self._build_chain_with_specific_raised(
+                sensor_id=sensor_id,
+                current_set=current_set,
+                raised_sensor=raised_sensor,
+                logfile_df=logfile_df,
+                verbose=verbose
+            )
+            
+            if not chain or len(chain) < 2:
+                if verbose:
+                    print(f"   ⚠️ No se pudo construir cadena completa")
+                continue
+            
+            # Calcular offset para este camino
+            offset, error, details = self.calculate_offset_from_chain(chain, verbose=False)
+            
+            if offset is None:
+                if verbose:
+                    print(f"   ⚠️ No se pudo calcular offset")
+                continue
+            
+            path_info = {
+                'path_id': idx,
+                'raised_sensor': raised_sensor,
+                'chain': chain,
+                'offset': offset,
+                'error': error,
+                'details': details
+            }
+            all_paths.append(path_info)
+            
+            if verbose:
+                print(f"   ✅ Offset: {offset:.6f} ± {error:.6f}")
+                chain_str = " → ".join([f"{s} (R{r})" for s, set_id, r in chain])
+                print(f"   Cadena: {chain_str}")
+        
+        if not all_paths:
+            if verbose:
+                print(f"\n⚠️ No se pudo calcular ningún camino válido")
+            return None, None, {}
+        
+        if verbose:
+            print(f"\n" + "="*80)
+            print(f"📊 RESUMEN DE CAMINOS CALCULADOS")
+            print(f"="*80)
+            print(f"   Total de caminos válidos: {len(all_paths)}/{len(all_raised_sensors)}")
+        
+        # 4. Identificar el camino con menor error
+        best_path = min(all_paths, key=lambda p: p['error'])
+        
+        if verbose:
+            print(f"\n🏆 MEJOR CAMINO (menor error):")
+            print(f"   Camino #{best_path['path_id']}: Sensor raised {best_path['raised_sensor']}")
+            print(f"   Offset: {best_path['offset']:.6f} ± {best_path['error']:.6f}")
+        
+        # 5. Calcular media ponderada usando error como peso
+        # Peso: w_i = 1 / error_i²
+        weights = []
+        weighted_offsets = []
+        
+        if verbose:
+            print(f"\n⚖️  CÁLCULO DE MEDIA PONDERADA:")
+            print(f"   Fórmula: w_i = 1 / error_i²")
+        
+        for path in all_paths:
+            weight = 1.0 / (path['error'] ** 2)
+            weights.append(weight)
+            weighted_offsets.append(path['offset'] * weight)
+            
+            if verbose:
+                print(f"   Camino #{path['path_id']}: peso = {weight:.6f}")
+        
+        sum_weights = sum(weights)
+        sum_weighted_offsets = sum(weighted_offsets)
+        
+        offset_weighted = sum_weighted_offsets / sum_weights
+        error_weighted = 1.0 / np.sqrt(sum_weights)
+        
+        if verbose:
+            print(f"\n🎯 RESULTADO FINAL (MEDIA PONDERADA):")
+            print(f"   Offset ponderado: {offset_weighted:.6f}")
+            print(f"   Error ponderado:  {error_weighted:.6f}")
+            print(f"   Expresión: {offset_weighted:.6f} ± {error_weighted:.6f}")
+            
+            # Comparar con el mejor camino
+            diff_offset = abs(offset_weighted - best_path['offset'])
+            diff_error = abs(error_weighted - best_path['error'])
+            print(f"\n📈 COMPARACIÓN CON MEJOR CAMINO:")
+            print(f"   Diferencia en offset: {diff_offset:.6f}")
+            print(f"   Diferencia en error:  {diff_error:.6f}")
+            
+            if error_weighted < best_path['error']:
+                print(f"   ✅ Media ponderada tiene MENOR error ({error_weighted:.6f} < {best_path['error']:.6f})")
+            else:
+                print(f"   ℹ️  Mejor camino individual tiene menor error ({best_path['error']:.6f} < {error_weighted:.6f})")
+        
+        # 6. Preparar diccionario de información
+        info = {
+            'n_paths': len(all_paths),
+            'n_raised_sensors': len(all_raised_sensors),
+            'paths': all_paths,
+            'best_path': best_path,
+            'weights': weights,
+            'offset_weighted': offset_weighted,
+            'error_weighted': error_weighted,
+            'offset_best': best_path['offset'],
+            'error_best': best_path['error']
+        }
+        
+        if verbose:
+            print("="*80)
+        
+        return offset_weighted, error_weighted, info
+    
+    def _build_chain_with_specific_raised(
+        self,
+        sensor_id: int,
+        current_set: int,
+        raised_sensor: int,
+        logfile_df: pd.DataFrame,
+        verbose: bool = False
+    ) -> List[Tuple[int, int, int]]:
+        """
+        Construye una cadena de calibración usando un sensor raised específico.
+        
+        Método auxiliar para compute_weighted_offset_all_paths().
+        Similar a build_calibration_chain() pero fuerza el uso de un sensor raised concreto.
+        
+        Args:
+            sensor_id: ID del sensor inicial
+            current_set: Set donde está el sensor inicial
+            raised_sensor: Sensor raised específico a usar
+            logfile_df: DataFrame del LogFile
+            verbose: Si True, imprime información
+            
+        Returns:
+            List[Tuple[int, int, int]]: Cadena de (sensor_id, set_id, round_num)
+        """
+        chain = [(sensor_id, current_set, 1)]
+        current_round = 1
+        
+        # Seguir la cadena desde este sensor raised específico
+        while True:
+            next_round = current_round + 1
+            
+            # Buscar en qué set de la siguiente ronda está este raised_sensor
+            next_set = None
+            
+            for set_id in logfile_df['CalibSetNumber'].dropna().unique():
+                try:
+                    set_id_int = int(float(set_id))
+                except Exception:
+                    continue
+                
+                if set_id_int not in self.sets:
+                    continue
+                
+                try:
+                    round_num = self._get_set_round(set_id_int)
+                except Exception:
+                    continue
+                
+                if round_num != next_round:
+                    continue
+                
+                set_rows = logfile_df[logfile_df['CalibSetNumber'] == set_id]
+                if set_rows.empty:
+                    continue
+                
+                sensor_values = []
+                for col in [f'S{i}' for i in range(1, 21)]:
+                    if col in set_rows.columns:
+                        vals = set_rows[col].dropna().values
+                        sensor_values.extend(vals)
+                
+                sensor_values_int = []
+                for val in sensor_values:
+                    try:
+                        sensor_values_int.append(int(float(val)))
+                    except Exception:
+                        pass
+                
+                if raised_sensor in sensor_values_int:
+                    next_set = set_id_int
+                    break
+            
+            if next_set is None:
+                break
+            
+            # Obtener primer sensor del siguiente set
+            set_rows_next = logfile_df[logfile_df['CalibSetNumber'] == next_set]
+            if not set_rows_next.empty:
+                first_sensor = None
+                for col in [f'S{i}' for i in range(1, 21)]:
+                    if col in set_rows_next.columns:
+                        val = set_rows_next[col].dropna().values
+                        if len(val) > 0:
+                            try:
+                                first_sensor = int(float(val[0]))
+                                break
+                            except Exception:
+                                pass
+                
+                if first_sensor is not None:
+                    chain.append((first_sensor, next_set, next_round))
+                else:
+                    chain.append((raised_sensor, next_set, next_round))
+            else:
+                chain.append((raised_sensor, next_set, next_round))
+            
+            # Obtener próximo sensor raised del set actual
+            if next_set not in self.config.get('sensors', {}).get('sets', {}):
+                break
+            
+            next_config = self.config['sensors']['sets'][next_set]
+            next_raised_sensors = next_config.get('raised', [])
+            
+            if not next_raised_sensors:
+                break
+            
+            # Usar el primer raised del siguiente set
+            raised_sensor = next_raised_sensors[0]
+            current_set = next_set
+            current_round = next_round
+        
+        return chain
+
     # ------------------------------------------------------------------
     # UTILITIES
     # ------------------------------------------------------------------

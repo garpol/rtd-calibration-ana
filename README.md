@@ -77,6 +77,79 @@ pytest -q
 A small test ensures that when `write_csv=False` and `write_excel=False` only PNGs are produced
 and no CSV/XLSX files get written.
 
+## Advanced Features: Multi-Path Calibration Offset Calculation
+
+The `CalibrationNetwork` class in `src/calibration_network.py` provides advanced methods for computing calibration offsets using multiple paths through the calibration chain.
+
+### Single-Path Offset Calculation
+
+```python
+from RTD_Calibration_VGP.src.calibration_network import CalibrationNetwork
+from RTD_Calibration_VGP.src.logfile import Logfile
+
+# Initialize network
+net = CalibrationNetwork()
+logfile = Logfile('RTD_Calibration_VGP/data/LogFile.csv')
+
+# Build calibration chain for a sensor (finds path from R1 → R2 → R3)
+chain = net.build_calibration_chain(
+    sensor_id=48203,
+    logfile_df=logfile.log_file,
+    verbose=True
+)
+
+# Calculate offset along the chain
+offset, error, details = net.calculate_offset_from_chain(chain, verbose=True)
+print(f"Offset: {offset:.6f} ± {error:.6f}")
+```
+
+### Multi-Path Weighted Offset Calculation
+
+For sensors with multiple "raised" sensors (bridge sensors appearing in multiple rounds), you can calculate offsets through **all possible paths** and compute a weighted average:
+
+```python
+# Calculate offset using ALL possible paths through raised sensors
+offset_weighted, error_weighted, info = net.compute_weighted_offset_all_paths(
+    sensor_id=48203,
+    logfile_df=logfile.log_file,
+    verbose=True
+)
+
+print(f"Number of paths found: {info['n_paths']}")
+print(f"Best path error: {info['error_best']:.6f}")
+print(f"Weighted average offset: {offset_weighted:.6f} ± {error_weighted:.6f}")
+```
+
+**How it works:**
+1. Finds all "raised" sensors configured for the calibration set
+2. Builds a calibration chain for each raised sensor
+3. Calculates offset and error for each path
+4. Computes weighted average using inverse variance weighting:
+   - Weight: `w_i = 1 / error_i²`
+   - Final offset: `Σ(offset_i × w_i) / Σ(w_i)`
+   - Final error: `1 / √(Σw_i)`
+
+This approach typically reduces the final uncertainty by combining information from multiple independent calibration paths.
+
+**Example output:**
+```
+📊 RESUMEN DE CAMINOS CALCULADOS
+   Total de caminos válidos: 3/3
+
+🏆 MEJOR CAMINO (menor error):
+   Camino #2: Sensor raised 48204
+   Offset: 0.123456 ± 0.000234
+
+🎯 RESULTADO FINAL (MEDIA PONDERADA):
+   Offset ponderado: 0.123450
+   Error ponderado:  0.000198
+   
+📈 COMPARACIÓN CON MEJOR CAMINO:
+   ✅ Media ponderada tiene MENOR error (0.000198 < 0.000234)
+```
+
+See `notebooks/TREE.ipynb` for a complete working example.
+
 ## Plotting behavior and important rules
 
 - The helper that generates repeatability plots excludes any `Filename` containing `_pre`
