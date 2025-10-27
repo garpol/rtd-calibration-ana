@@ -76,6 +76,19 @@ class CalibrationNetwork:
         if not sets_dict:
             logger.warning("No sets provided in sets_dict")
         
+        # ═════════════════════════════════════════════════════════════════
+        # ALMACENAMIENTO DE OFFSETS Y ERRORES DE LA RED COMPLETA
+        # ═════════════════════════════════════════════════════════════════
+        # Diccionarios para almacenar offsets y errores calculados entre sensores
+        # Estructura: {(sensor_from, sensor_to): valor}
+        self.global_offsets: Dict[Tuple[int, int], float] = {}
+        self.global_errors: Dict[Tuple[int, int], float] = {}
+        self.offset_paths: Dict[Tuple[int, int], List] = {}
+        
+        # Offsets directos dentro de un set
+        # Estructura: {(sensor_from, sensor_to): {'offset': float, 'error': float, 'set_id': float}}
+        self.direct_offsets: Dict[Tuple[int, int], Dict] = {}
+        
         # Normalize DataFrame indices/columns to strings for consistency
         self._normalize_dataframe_indices()
         
@@ -117,10 +130,102 @@ class CalibrationNetwork:
         """
         logger.info("Building calibration graph from configuration...")
 
+        # Primero añadir todos los sets como nodos
+        for set_id in self.sets.keys():
+            self.graph.add_node(set_id)
+        
         sets_config = self._extract_sets_configuration()
         edges_added = self._build_graph_edges(sets_config)
         
         logger.info(f"Graph built with {len(self.graph.nodes)} sets and {edges_added} connections.")
+        
+        # Validate tree connectivity and remove disconnected sets
+        self._validate_and_prune_disconnected_sets()
+
+    def _validate_and_prune_disconnected_sets(self) -> None:
+        """
+        Validate tree connectivity and automatically remove sets that are not connected
+        to the reference set (highest round). This prevents processing sets that belong
+        to incomplete branches of the calibration tree.
+        
+        Example:
+            If Set 57 (R3) is the reference and Sets 55-56 (R2) connect to a future
+            Set 58 (R3) that doesn't exist yet, those sets will be automatically removed.
+        """
+        if len(self.graph.nodes) == 0:
+            logger.warning("Graph is empty, nothing to validate.")
+            return
+        
+        # Find the reference set (highest round number)
+        ref_set = self._find_reference_set()
+        if ref_set is None:
+            logger.warning("Could not identify reference set, skipping connectivity validation.")
+            return
+        
+        # Find all sets connected to the reference (using BFS/DFS)
+        try:
+            # Get connected component containing the reference set
+            if ref_set not in self.graph.nodes:
+                logger.error(f"Reference set {ref_set} not found in graph!")
+                return
+                
+            connected_sets = set(nx.node_connected_component(self.graph, ref_set))
+            all_sets = set(self.graph.nodes)
+            disconnected_sets = all_sets - connected_sets
+            
+            if disconnected_sets:
+                logger.warning(f"⚠️  TREE VALIDATION: Found {len(disconnected_sets)} set(s) NOT connected to reference set {ref_set}")
+                logger.warning(f"    Disconnected sets: {sorted(disconnected_sets)}")
+                logger.warning(f"    These sets will be REMOVED from analysis (likely waiting for future reference sets).")
+                
+                # Remove disconnected sets from graph AND from self.sets
+                for disc_set in disconnected_sets:
+                    self.graph.remove_node(disc_set)
+                    if disc_set in self.sets:
+                        del self.sets[disc_set]
+                        logger.debug(f"    Removed set {disc_set} from analysis")
+                
+                logger.info(f"✅ Tree validated: {len(connected_sets)} sets remain (all connected to reference {ref_set})")
+            else:
+                logger.info(f"✅ Tree validated: All {len(all_sets)} sets are connected to reference {ref_set}")
+                
+        except Exception as e:
+            logger.error(f"Error during tree validation: {e}")
+
+    def _find_reference_set(self) -> Optional[Union[float, str]]:
+        """
+        Find the reference set (set with the highest round number).
+        
+        Returns:
+            Optional[Union[float, str]]: Reference set ID or None if not found
+        """
+        try:
+            sets_config = self._extract_sets_configuration()
+            max_round = -1
+            ref_set = None
+            
+            for set_id_str, data in sets_config.items():
+                round_num = data.get("round", 1)
+                if round_num > max_round:
+                    max_round = round_num
+                    # Find matching set_id in self.sets
+                    for candidate in self.sets.keys():
+                        if str(candidate) == str(set_id_str):
+                            ref_set = candidate
+                            break
+                        try:
+                            if float(candidate) == float(set_id_str):
+                                ref_set = candidate
+                                break
+                        except (ValueError, TypeError):
+                            continue
+            
+            if ref_set:
+                logger.debug(f"Reference set identified: {ref_set} (Round {max_round})")
+            return ref_set
+        except Exception as e:
+            logger.error(f"Error finding reference set: {e}")
+            return None
 
     def _extract_sets_configuration(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -232,13 +337,15 @@ class CalibrationNetwork:
             if other_data.get("round", 1) != round_id + 1:
                 continue
 
-            bridge_sensors = self._find_bridge_sensors(raised_sensors, other_data)
+            # Find bridge sensors by checking actual calibration_constants
+            bridge_sensors = self._find_bridge_sensors(raised_sensors, other_id)
             
-            for sensor in bridge_sensors:
+            if bridge_sensors:
+                # Add a single edge with all bridge sensors
                 try:
-                    self.graph.add_edge(set_id, other_id, sensor=sensor)
+                    self.graph.add_edge(set_id, other_id, sensors=bridge_sensors)
                     edges_added += 1
-                    logger.debug(f"Added edge: {set_id} ↔ {other_id} via sensor {sensor}")
+                    logger.debug(f"Added edge: {set_id} ↔ {other_id} via sensors {bridge_sensors}")
                 except Exception as e:
                     logger.warning(f"Failed to add edge between {set_id} and {other_id}: {e}")
 
@@ -247,22 +354,37 @@ class CalibrationNetwork:
     def _find_bridge_sensors(
         self, 
         raised_sensors: List[int], 
-        other_data: Dict[str, Any]
+        other_set_id: Union[float, str]
     ) -> List[int]:
         """
-        Find bridge sensors between two sets.
+        Find bridge sensors between two sets by checking if raised sensors
+        actually appear in the calibration_constants of the other set.
         
         Args:
             raised_sensors (List[int]): Raised sensors from current set
-            other_data (Dict[str, Any]): Other set configuration
+            other_set_id: ID of the other set to check
             
         Returns:
-            List[int]: Bridge sensors found
+            List[int]: Bridge sensors found (sensors that exist in both sets)
         """
-        return [
-            s for s in raised_sensors
-            if s in other_data.get("raised", []) or s in other_data.get("discarded", [])
-        ]
+        if other_set_id not in self.sets:
+            return []
+        
+        other_set = self.sets[other_set_id]
+        if not hasattr(other_set, 'calibration_constants') or other_set.calibration_constants is None:
+            return []
+        
+        # Get sensor IDs from calibration_constants index (converted to integers)
+        try:
+            other_sensors = [int(float(s)) for s in other_set.calibration_constants.index]
+        except (ValueError, TypeError):
+            logger.warning(f"Could not convert sensor IDs to int for set {other_set_id}")
+            return []
+        
+        # Find raised sensors that appear in the other set's calibration_constants
+        bridge_sensors = [s for s in raised_sensors if s in other_sensors]
+        
+        return bridge_sensors
 
     def _get_set_round(self, set_id: Union[float, str]) -> int:
         """
@@ -382,6 +504,124 @@ class CalibrationNetwork:
             reference_set = list(self.sets.keys())[0] if self.sets else None
         
         return reference_set
+    
+    def get_absolute_reference_sensor(self) -> Optional[int]:
+        """
+        Get the absolute reference sensor ID for the entire calibration system.
+        
+        This is the first sensor from the reference set (highest round), which serves
+        as the base reference for all calibration calculations in the system.
+        
+        Returns:
+            int or None: Absolute reference sensor ID, or None if not found
+        """
+        ref_set = self.get_reference_set()
+        if ref_set is None:
+            logger.warning("No reference set found, cannot determine absolute reference sensor")
+            return None
+        
+        ref_sensor = self._get_reference_sensor(ref_set)
+        if ref_sensor is None:
+            logger.warning(f"Reference set {ref_set} has no reference sensor")
+        
+        return ref_sensor
+    
+    # ═════════════════════════════════════════════════════════════════════
+    # MÉTODOS DE ALMACENAMIENTO Y RECUPERACIÓN DE OFFSETS
+    # ═════════════════════════════════════════════════════════════════════
+    
+    def store_offset(self, sensor_from: int, sensor_to: int, offset: float, 
+                    error: float, set_id: Optional[Union[float, str]] = None, 
+                    path: Optional[List] = None):
+        """
+        Almacenar un offset calculado entre dos sensores.
+        
+        Args:
+            sensor_from: ID del sensor origen
+            sensor_to: ID del sensor destino (referencia)
+            offset: Valor del offset
+            error: Error asociado
+            set_id: Set donde se calculó (opcional, para offsets directos)
+            path: Camino de sets utilizado (opcional)
+        """
+        key = (int(sensor_from), int(sensor_to))
+        self.global_offsets[key] = offset
+        self.global_errors[key] = error
+        
+        if path:
+            self.offset_paths[key] = path
+        
+        # Si es un offset directo (dentro de un set)
+        if set_id is not None:
+            self.direct_offsets[key] = {
+                'offset': offset,
+                'error': error,
+                'set_id': set_id
+            }
+    
+    def get_offset(self, sensor_from: int, sensor_to: int) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Obtener offset almacenado entre dos sensores.
+        
+        Args:
+            sensor_from: ID del sensor origen
+            sensor_to: ID del sensor destino
+            
+        Returns:
+            Tupla (offset, error) o (None, None) si no existe
+        """
+        key = (int(sensor_from), int(sensor_to))
+        if key in self.global_offsets:
+            return self.global_offsets[key], self.global_errors[key]
+        return None, None
+    
+    def get_all_offsets_for_sensor(self, sensor_id: int) -> Dict[int, Dict]:
+        """
+        Obtener todos los offsets calculados para un sensor.
+        
+        Args:
+            sensor_id: ID del sensor
+            
+        Returns:
+            Diccionario {sensor_ref: {'offset': float, 'error': float, 'path': list}}
+        """
+        sensor_id = int(sensor_id)
+        results = {}
+        
+        for (s_from, s_to), offset in self.global_offsets.items():
+            if s_from == sensor_id:
+                results[s_to] = {
+                    'offset': offset,
+                    'error': self.global_errors.get((s_from, s_to), None),
+                    'path': self.offset_paths.get((s_from, s_to), None)
+                }
+        
+        return results
+    
+    def export_all_offsets(self) -> pd.DataFrame:
+        """
+        Exportar todos los offsets y errores calculados a un DataFrame.
+        
+        Returns:
+            DataFrame con columnas: sensor_from, sensor_to, offset, error, path
+        """
+        data = []
+        for (s_from, s_to), offset in self.global_offsets.items():
+            data.append({
+                'sensor_from': s_from,
+                'sensor_to': s_to,
+                'offset': offset,
+                'error': self.global_errors.get((s_from, s_to), None),
+                'path': self.offset_paths.get((s_from, s_to), None)
+            })
+        return pd.DataFrame(data)
+    
+    def clear_offsets(self):
+        """Limpiar todos los offsets almacenados."""
+        self.global_offsets.clear()
+        self.global_errors.clear()
+        self.offset_paths.clear()
+        self.direct_offsets.clear()
 
     def validate_sets_structure(self) -> Dict[str, List[str]]:
         """
@@ -433,9 +673,20 @@ class CalibrationNetwork:
     # INSPECTION AND DEBUGGING
     # ------------------------------------------------------------------
     def show_graph_summary(self):
+        """Display a summary of the calibration graph."""
+        print("Summary of calibration graph:")
+        for edge in self.graph.edges(data=True):
+            # Handle both 'sensor' (singular, old format) and 'sensors' (plural, new format)
+            sensors = edge[2].get('sensors', [edge[2].get('sensor')] if 'sensor' in edge[2] else [])
+            if sensors:
+                print(f"  {edge[0]} ↔ {edge[1]}  (bridge sensors: {sensors})")
+        
+        # Also log for debugging
         logger.info("Summary of calibration graph:")
         for edge in self.graph.edges(data=True):
-            logger.info(f"  {edge[0]} ↔ {edge[1]}  (bridge sensor: {edge[2]['sensor']})")
+            sensors = edge[2].get('sensors', [edge[2].get('sensor')] if 'sensor' in edge[2] else [])
+            if sensors:
+                logger.info(f"  {edge[0]} ↔ {edge[1]}  (bridge sensors: {sensors})")
 
     # ------------------------------------------------------------------
     # FUNCTIONS FOR FINDING CONNECTIONS
@@ -507,7 +758,12 @@ class CalibrationNetwork:
         total_error2 = 0.0
 
         for a, b in zip(path[:-1], path[1:]):
-            sensor_bridge = self.graph[a][b]['sensor']
+            # Get bridge sensors list and pick the first one
+            bridge_sensors = self.graph[a][b].get('sensors', [])
+            if not bridge_sensors:
+                raise RuntimeError(f"No bridge sensors found between Set {a} and Set {b}")
+            sensor_bridge = bridge_sensors[0]  # Use first bridge sensor
+            
             setA = self.sets[a]
             setB = self.sets[b]
 
@@ -519,14 +775,22 @@ class CalibrationNetwork:
             # offset A→bridge
             dA = 0.0
             eA = 0.0
-            if si_str in setA.calibration_constants.index and sb_str in setA.calibration_constants.columns:
+            if si_str == sb_str:
+                # Same sensor, offset is 0
+                dA = 0.0
+                eA = 0.0
+            elif si_str in setA.calibration_constants.index and sb_str in setA.calibration_constants.columns:
                 dA = setA.calibration_constants.loc[si_str, sb_str]
                 eA = setA.calibration_errors.loc[si_str, sb_str] if hasattr(setA, 'calibration_errors') and setA.calibration_errors is not None else 0.0
 
-            # offset bridge→B
+            # offset bridge→j
             dB = 0.0
             eB = 0.0
-            if sj_str in setB.calibration_constants.columns and sb_str in setB.calibration_constants.index:
+            if sb_str == sj_str:
+                # Same sensor, offset is 0
+                dB = 0.0
+                eB = 0.0
+            elif sj_str in setB.calibration_constants.columns and sb_str in setB.calibration_constants.index:
                 dB = setB.calibration_constants.loc[sb_str, sj_str]
                 eB = setB.calibration_errors.loc[sb_str, sj_str] if hasattr(setB, 'calibration_errors') and setB.calibration_errors is not None else 0.0
 
@@ -604,7 +868,19 @@ class CalibrationNetwork:
                     ref_sensor = ref_sensors[0]
             
             if ref_sensor is None:
-                raise RuntimeError(f"Set {ref_set} no tiene sensores raised definidos en la configuración.")
+                # Si el set de referencia es de Ronda 3 (referencia absoluta), 
+                # usar el primer sensor del sensor mapping como referencia
+                ref_round = round_by_set.get(ref_set, 0)
+                if ref_round == 3:
+                    # Intentar obtener el primer sensor del calibration_constants
+                    df_ref = getattr(self.sets[ref_set], "calibration_constants", None)
+                    if df_ref is not None and not df_ref.empty:
+                        ref_sensor = df_ref.index[0]
+                        logger.info(f"Set {ref_set} es Ronda 3 (referencia absoluta): usando primer sensor {ref_sensor}")
+                    else:
+                        raise RuntimeError(f"Set {ref_set} (Ronda 3) no tiene calibration_constants disponibles")
+                else:
+                    raise RuntimeError(f"Set {ref_set} (Ronda {ref_round}) no tiene sensores raised definidos en la configuración.")
 
         # Guardamos el sensor de referencia para usos futuros
         self.reference_sensor = ref_sensor
@@ -646,6 +922,10 @@ class CalibrationNetwork:
         while current_round < ref_round and iteration < max_iterations:
             iteration += 1
             
+            # Si ya llegamos al set de referencia, salir del loop
+            if current_set == ref_set:
+                break
+            
             # Obtener sensores raised del set actual
             raised = None
             if hasattr(self.sets[current_set], "sensors_raised_by_set"):
@@ -656,6 +936,9 @@ class CalibrationNetwork:
                 raised = self.config.get("sensors", {}).get("sets", {}).get(str(current_set), {}).get("raised", [])
             
             if not raised:
+                # Si es el set de referencia (Ronda 3), no necesita raised
+                if current_set == ref_set:
+                    break
                 raise RuntimeError(f"Set {current_set} (ronda {current_round}) no tiene sensores raised definidos")
 
             bridge = raised[0]  # puente hacia siguiente ronda
@@ -666,18 +949,41 @@ class CalibrationNetwork:
                 if s == current_set:
                     continue
                 
-                # Check if bridge is in raised sensors of this set
-                raised_next = None
-                if hasattr(obj, "sensors_raised_by_set"):
-                    raised_next = getattr(obj, "sensors_raised_by_set", {}).get(s, [])
+                # Verificar si este set es de la ronda siguiente
+                if round_by_set.get(s, 0) != current_round + 1:
+                    continue
                 
-                if not raised_next:
-                    raised_next = self.config.get("sensors", {}).get("sets", {}).get(str(s), {}).get("raised", [])
-                
-                if bridge in raised_next:
-                    if round_by_set.get(s, 0) == current_round + 1:
-                        next_set = s
-                        break
+                # Para sets de Ronda 3+ (referencia), buscar bridge en calibration_constants
+                # porque estos sets no tienen "raised" definidos (ellos SON la referencia)
+                next_round = round_by_set.get(s, 0)
+                if next_round >= 3:
+                    # Buscar bridge en los sensores del calibration_constants
+                    df_next = getattr(obj, "calibration_constants", None)
+                    if df_next is not None:
+                        sensors_in_next = list(df_next.index)
+                        # Comparar con normalización de tipos (int/str)
+                        bridge_str = str(bridge)
+                        sensors_str = [str(x) for x in sensors_in_next]
+                        if bridge_str in sensors_str:
+                            next_set = s
+                            logger.info(f"Encontrado sensor puente {bridge} en Set {s} (Ronda {next_round}, referencia)")
+                            break
+                else:
+                    # Para Rondas 1-2, buscar en raised (lógica original)
+                    raised_next = None
+                    if hasattr(obj, "sensors_raised_by_set"):
+                        raised_next = getattr(obj, "sensors_raised_by_set", {}).get(s, [])
+                    
+                    if not raised_next:
+                        raised_next = self.config.get("sensors", {}).get("sets", {}).get(str(s), {}).get("raised", [])
+                    
+                    if raised_next:
+                        # Comparar con normalización de tipos (int/str)
+                        bridge_str = str(bridge)
+                        raised_str = [str(x) for x in raised_next]
+                        if bridge_str in raised_str:
+                            next_set = s
+                            break
 
             if next_set is None:
                 raise RuntimeError(
