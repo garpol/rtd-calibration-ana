@@ -114,6 +114,28 @@ En cada comparación, **normalizar ambos operandos al mismo tipo**:
 
 Las funciones auxiliares del notebook (`get_set_round`, etc.) deberían moverse a `calibration_network.py` para mejor mantenimiento.
 
+## 📋 Próximos Pasos Sugeridos
+
+1. **Traducir código y comentarios a inglés**
+   - Renombrar variables en español a inglés (ej: `sets_ronda_1` → `sets_round_1`)
+   - Traducir mensajes de print/log a inglés
+   - Actualizar comentarios en el código
+   - Mantener consistencia con estándares internacionales
+
+2. **Expandir dataset de prueba**
+   - Quitar limitación `TEST_SETS = [3, 4, 49, 57]`
+   - Procesar todos los sets disponibles
+   - Validar conectividad completa del grafo
+
+3. **Refactoring de funciones del notebook**
+   - Mover `get_set_round()` a `CalibrationNetwork`
+   - Consolidar validaciones en métodos reutilizables
+
+4. **Mejoras de type safety**
+   - Añadir type hints a todas las funciones
+   - Crear tests unitarios para edge cases de tipos
+   - Documentar convenciones de tipos en README
+
 
 ---
 
