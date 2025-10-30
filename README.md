@@ -47,6 +47,10 @@ example config disables CSV/XLSX summary writing and only writes PNG plots to
 ## Configuration
 
 - Example config: `config/example_config.yaml` (used by the quick-start snippet above).
+- **Sensor configuration**: `RTD_Calibration_VGP/config/sensors.yaml` — Defines per-set metadata including:
+  - `discarded`: Sensors to exclude from analysis
+  - `raised`: Bridge sensors that appear in multiple calibration rounds
+  - `round`: Calibration round number (1=R1, 2=R2, 3=R3/Reference)
 - Key behavior toggles:
   - `output.write_csv` / `output.write_excel`: control whether numeric summaries are written.
   - `paths.logfile`: path to the main `LogFile.csv` (or a test/smoke CSV).
@@ -55,6 +59,28 @@ example config disables CSV/XLSX summary writing and only writes PNG plots to
 
 The `Set` class accepts either a `Logfile` object, a DataFrame, or a path to a logfile.
 See `RTD_Calibration_VGP/src/utils.py` and `RTD_Calibration_VGP/src/logfile.py` for details.
+
+### Sensor Configuration Format
+
+Example `sensors.yaml` structure:
+```yaml
+sensors:
+  sets:
+    3:
+      discarded: [48205, 48478]
+      raised: [48203, 48479]
+      round: 1
+    49:
+      discarded: []
+      raised: [48203, 48479]  # Same sensors appear in R2
+      round: 2
+    57:
+      discarded: []
+      raised: []
+      round: 3  # Reference set
+```
+
+**Important**: The calibration network automatically detects connections between sets based on shared "raised" sensors. Set 3 (R1) connects to Set 49 (R2) because they share sensors 48203 and 48479.
 
 ## Smoke dataset (for CI)
 
@@ -164,6 +190,10 @@ See `notebooks/TREE.ipynb` for a complete working example.
   imports which assume the venv's working directory is the repo root.
 - If Excel writing fails in minimal CI environments, disable `output.write_excel` in the config or
   pass `write_excel=False` to `Set.offset_repeatability()`.
+- **Type handling**: The codebase handles mixed types (Python int/float, numpy int64/float64, pandas objects) gracefully. If you encounter type-related errors:
+  - Ensure `sensors.yaml` uses numeric keys (not strings): `3:` not `"3":`
+  - CalibSetNumber in LogFile.csv can be any numeric-like format (will be converted)
+  - Use `isinstance(x, (int, float, np.integer, np.floating))` for type checks involving pandas data
 
 ## Contributing / Next steps
 

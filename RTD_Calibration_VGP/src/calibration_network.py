@@ -3,7 +3,10 @@ import numpy as np
 import logging
 import yaml
 from typing import Dict, Tuple, List, Optional, Any, Union
-from .utils import load_config, DEFAULT_CONFIG
+try:
+    from .utils import load_config, DEFAULT_CONFIG
+except ImportError:
+    from utils import load_config, DEFAULT_CONFIG
 
 # Attempt to import networkx and provide a clear instruction if it is missing.
 try:
@@ -65,8 +68,8 @@ class CalibrationNetwork:
                 self.config = load_config(config_path)
             else:
                 self.config = DEFAULT_CONFIG.copy()
-        except Exception as e:
-            logger.warning(f"Could not load configuration: {e}. Using defaults.")
+        except (FileNotFoundError, yaml.YAMLError, KeyError) as e:
+            logger.warning("Could not load configuration: %s. Using defaults.", e)
             self.config = DEFAULT_CONFIG.copy()
         
         # Validate sets_dict
@@ -116,8 +119,8 @@ class CalibrationNetwork:
                     df.index = df.index.astype(str)
                     df.columns = df.columns.astype(str)
                     set_obj.calibration_errors = df
-            except Exception as e:
-                logger.warning(f"Could not normalize DataFrames for set {set_id}: {e}")
+            except (ValueError, KeyError, AttributeError) as e:
+                logger.warning("Could not normalize DataFrames for set %s: %s", set_id, e)
 
     # ------------------------------------------------------------------
     # BUILDING THE CONNECTION GRAPH BETWEEN SETS
@@ -137,7 +140,7 @@ class CalibrationNetwork:
         sets_config = self._extract_sets_configuration()
         edges_added = self._build_graph_edges(sets_config)
         
-        logger.info(f"Graph built with {len(self.graph.nodes)} sets and {edges_added} connections.")
+        logger.info("Graph built with %d sets and %d connections.", len(self.graph.nodes), edges_added)
         
         # Validate tree connectivity and remove disconnected sets
         self._validate_and_prune_disconnected_sets()
@@ -166,7 +169,7 @@ class CalibrationNetwork:
         try:
             # Get connected component containing the reference set
             if ref_set not in self.graph.nodes:
-                logger.error(f"Reference set {ref_set} not found in graph!")
+                logger.error("Reference set %s not found in graph!", ref_set)
                 return
                 
             connected_sets = set(nx.node_connected_component(self.graph, ref_set))
@@ -174,23 +177,23 @@ class CalibrationNetwork:
             disconnected_sets = all_sets - connected_sets
             
             if disconnected_sets:
-                logger.warning(f"⚠️  TREE VALIDATION: Found {len(disconnected_sets)} set(s) NOT connected to reference set {ref_set}")
-                logger.warning(f"    Disconnected sets: {sorted(disconnected_sets)}")
-                logger.warning(f"    These sets will be REMOVED from analysis (likely waiting for future reference sets).")
+                logger.warning("⚠️  TREE VALIDATION: Found %d set(s) NOT connected to reference set %s", len(disconnected_sets), ref_set)
+                logger.warning("    Disconnected sets: %s", sorted(disconnected_sets))
+                logger.warning("    These sets will be REMOVED from analysis (likely waiting for future reference sets).")
                 
                 # Remove disconnected sets from graph AND from self.sets
                 for disc_set in disconnected_sets:
                     self.graph.remove_node(disc_set)
                     if disc_set in self.sets:
                         del self.sets[disc_set]
-                        logger.debug(f"    Removed set {disc_set} from analysis")
+                        logger.debug("    Removed set %s from analysis", disc_set)
                 
-                logger.info(f"✅ Tree validated: {len(connected_sets)} sets remain (all connected to reference {ref_set})")
+                logger.info("✅ Tree validated: %d sets remain (all connected to reference %s)", len(connected_sets), ref_set)
             else:
-                logger.info(f"✅ Tree validated: All {len(all_sets)} sets are connected to reference {ref_set}")
+                logger.info("✅ Tree validated: All %d sets are connected to reference %s", len(all_sets), ref_set)
                 
-        except Exception as e:
-            logger.error(f"Error during tree validation: {e}")
+        except (nx.NetworkXError, KeyError) as e:
+            logger.error("Error during tree validation: %s", e)
 
     def _find_reference_set(self) -> Optional[Union[float, str]]:
         """
@@ -221,10 +224,10 @@ class CalibrationNetwork:
                             continue
             
             if ref_set:
-                logger.debug(f"Reference set identified: {ref_set} (Round {max_round})")
+                logger.debug("Reference set identified: %s (Round %s)", ref_set, max_round)
             return ref_set
-        except Exception as e:
-            logger.error(f"Error finding reference set: {e}")
+        except (ValueError, TypeError, KeyError) as e:
+            logger.error("Error finding reference set: %s", e)
             return None
 
     def _extract_sets_configuration(self) -> Dict[str, Dict[str, Any]]:
@@ -253,8 +256,8 @@ class CalibrationNetwork:
                         "round": set_rounds.get(set_id, 1)
                     }
             return sets_config
-        except Exception as e:
-            logger.error(f"Error processing sensor configuration: {e}")
+        except (KeyError, AttributeError, TypeError) as e:
+            logger.error("Error processing sensor configuration: %s", e)
             return {}
 
     def _build_graph_edges(self, sets_config: Dict[str, Dict[str, Any]]) -> int:
@@ -284,7 +287,7 @@ class CalibrationNetwork:
                     continue
             
             if set_id is None:
-                logger.debug(f"Set ID '{set_id_str}' from config not found in sets_dict, skipping")
+                logger.debug("Set ID '%s' from config not found in sets_dict, skipping", set_id_str)
                 continue
 
             round_id = data.get("round", 1)
@@ -345,9 +348,9 @@ class CalibrationNetwork:
                 try:
                     self.graph.add_edge(set_id, other_id, sensors=bridge_sensors)
                     edges_added += 1
-                    logger.debug(f"Added edge: {set_id} ↔ {other_id} via sensors {bridge_sensors}")
-                except Exception as e:
-                    logger.warning(f"Failed to add edge between {set_id} and {other_id}: {e}")
+                    logger.debug("Added edge: %s ↔ %s via sensors %s", set_id, other_id, bridge_sensors)
+                except (nx.NetworkXError, ValueError) as e:
+                    logger.warning("Failed to add edge between %s and %s: %s", set_id, other_id, e)
 
         return edges_added
 
@@ -378,7 +381,7 @@ class CalibrationNetwork:
         try:
             other_sensors = [int(float(s)) for s in other_set.calibration_constants.index]
         except (ValueError, TypeError):
-            logger.warning(f"Could not convert sensor IDs to int for set {other_set_id}")
+            logger.warning("Could not convert sensor IDs to int for set %s", other_set_id)
             return []
         
         # Find raised sensors that appear in the other set's calibration_constants
@@ -522,9 +525,249 @@ class CalibrationNetwork:
         
         ref_sensor = self._get_reference_sensor(ref_set)
         if ref_sensor is None:
-            logger.warning(f"Reference set {ref_set} has no reference sensor")
+            logger.warning("Reference set %s has no reference sensor", ref_set)
         
         return ref_sensor
+    
+    # ═════════════════════════════════════════════════════════════════════
+    # MÉTODOS DE AUTO-DETECCIÓN Y VALIDACIÓN DE SENSORES RAISED
+    # ═════════════════════════════════════════════════════════════════════
+    
+    def auto_detect_raised_sensors(
+        self, 
+        set_id: Union[float, str], 
+        logfile_df: pd.DataFrame,
+        verbose: bool = False,
+        exclude_reference_sensors: bool = True
+    ) -> List[int]:
+        """
+        Auto-detecta sensores 'raised' comparando el sensor mapping de un set R1
+        con los sensor mappings de sets R2, identificando sensores comunes.
+        
+        IMPORTANTE: Los sensores de referencia (channels 13-14) son excluidos por defecto,
+        ya que se repiten en múltiples sets para monitoreo pero NO son parte del árbol
+        de calibración y NO deben considerarse como 'raised'.
+        
+        Args:
+            set_id: ID del set (típicamente Ronda 1)
+            logfile_df: DataFrame del LogFile con columnas S1..S20
+            verbose: Si True, imprime información detallada
+            exclude_reference_sensors: Si True (default), excluye sensores de referencia
+                                      (channels 13-14) de la detección
+            
+        Returns:
+            List[int]: Lista de sensor IDs que aparecen en sets de ronda superior
+                      (excluyendo sensores de referencia)
+        """
+        # Obtener ronda del set actual
+        current_round = self._get_set_round(set_id)
+        
+        if set_id not in self.sets:
+            logger.warning("Set %s no encontrado en sets_dict", set_id)
+            return []
+        
+        # Obtener sensores del set actual desde calibration_constants
+        current_set_obj = self.sets[set_id]
+        if not hasattr(current_set_obj, 'calibration_constants') or current_set_obj.calibration_constants is None:
+            logger.warning("Set %s no tiene calibration_constants", set_id)
+            return []
+        
+        current_sensors = set([int(float(s)) for s in current_set_obj.calibration_constants.index])
+        
+        # Obtener y excluir sensores de referencia si está habilitado
+        reference_sensor_ids = set()
+        if exclude_reference_sensors:
+            try:
+                ref_info = current_set_obj.get_reference_sensors_for_set(set_id)
+                reference_sensor_ids = ref_info.get('ref_sensor_ids', set())
+                if reference_sensor_ids and verbose:
+                    print(f"\n📌 Sensores de referencia encontrados (serán excluidos): {sorted(reference_sensor_ids)}")
+            except (AttributeError, TypeError):
+                # Método no disponible o set_obj no tiene el método
+                pass
+        
+        # Excluir sensores de referencia de los sensores del set actual
+        current_sensors = current_sensors - reference_sensor_ids
+        
+        if verbose:
+            print(f"\n🔍 Auto-detección de sensores raised para Set {set_id} (Ronda {current_round})")
+            print(f"   Sensores en el set (sin referencias): {sorted(current_sensors)}")
+        
+        # Buscar sets de ronda superior
+        raised_candidates = set()
+        
+        for other_set_id in self.sets.keys():
+            other_round = self._get_set_round(other_set_id)
+            
+            # Solo comparar con sets de ronda inmediatamente superior
+            if other_round != current_round + 1:
+                continue
+            
+            other_set_obj = self.sets[other_set_id]
+            if not hasattr(other_set_obj, 'calibration_constants') or other_set_obj.calibration_constants is None:
+                continue
+            
+            other_sensors = set([int(float(s)) for s in other_set_obj.calibration_constants.index])
+            
+            # También excluir referencias del set de ronda superior
+            if exclude_reference_sensors:
+                try:
+                    other_ref_info = other_set_obj.get_reference_sensors_for_set(other_set_id)
+                    other_ref_ids = other_ref_info.get('ref_sensor_ids', set())
+                    other_sensors = other_sensors - other_ref_ids
+                except (AttributeError, TypeError):
+                    pass
+            
+            # Encontrar sensores comunes (ambos ya tienen referencias excluidas)
+            common = current_sensors & other_sensors
+            
+            if common:
+                raised_candidates.update(common)
+                if verbose:
+                    print(f"   ✅ Set {other_set_id} (Ronda {other_round}): sensores comunes {sorted(common)}")
+        
+        result = sorted(list(raised_candidates))
+        
+        if verbose:
+            if result:
+                print(f"\n   🎯 Sensores raised detectados: {result}")
+            else:
+                print(f"\n   ⚠️ No se detectaron sensores raised (set posiblemente desconectado)")
+        
+        return result
+    
+    def validate_and_suggest_raised_sensors(
+        self, 
+        logfile_df: pd.DataFrame,
+        auto_fix_missing: bool = False,
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Valida la configuración de sensores raised comparando lo declarado en
+        sensors.yaml con lo detectado automáticamente del sensor mapping.
+        
+        Comprueba:
+        1. Sets sin raised definidos que deberían tenerlos
+        2. Raised declarados que no coinciden con la detección automática
+        3. Raised declarados que no existen en sets de ronda superior
+        
+        Args:
+            logfile_df: DataFrame del LogFile con sensor mappings
+            auto_fix_missing: Si True, sugiere añadir raised faltantes al config
+            verbose: Si True, imprime reportes detallados
+            
+        Returns:
+            Dict con resultados de validación:
+            {
+                'missing_raised': [(set_id, detected_raised), ...],
+                'mismatched_raised': [(set_id, declared, detected), ...],
+                'invalid_raised': [(set_id, invalid_sensors), ...],
+                'all_valid': bool
+            }
+        """
+        if verbose:
+            print("\n" + "="*80)
+            print("🔍 VALIDACIÓN DE SENSORES RAISED")
+            print("="*80)
+        
+        missing_raised = []
+        mismatched_raised = []
+        invalid_raised = []
+        
+        # Obtener configuración de sets
+        sets_config = self.config.get("sensors", {}).get("sets", {})
+        
+        # Validar cada set
+        for set_id in self.sets.keys():
+            round_num = self._get_set_round(set_id)
+            
+            # Solo validar sets que NO sean la ronda máxima (referencia)
+            max_round = max([self._get_set_round(s) for s in self.sets.keys()])
+            if round_num >= max_round:
+                continue
+            
+            # Obtener raised declarados en config
+            declared_raised = []
+            set_config_key = None
+            # Intentar múltiples variantes de tipo para buscar en el config
+            for key in [set_id, int(set_id) if self._can_convert_to_float(set_id) else None, 
+                       float(set_id) if self._can_convert_to_float(set_id) else None, str(set_id)]:
+                if key is None:
+                    continue
+                # Buscar con el tipo original (no convertir a string)
+                if key in sets_config:
+                    set_config_key = key
+                    declared_raised = sets_config[key].get('raised', [])
+                    break
+            
+            # Auto-detectar raised (excluyendo sensores de referencia)
+            detected_raised = self.auto_detect_raised_sensors(
+                set_id, 
+                logfile_df, 
+                verbose=False,
+                exclude_reference_sensors=True
+            )
+            
+            # CASO 1: No hay raised declarados pero se detectaron automáticamente
+            if not declared_raised and detected_raised:
+                missing_raised.append((set_id, detected_raised))
+                if verbose:
+                    print(f"\n⚠️  Set {set_id} (Ronda {round_num}): NO tiene raised declarados")
+                    print(f"   📊 Detección automática sugiere: {detected_raised}")
+                    print(f"   💡 Considera añadir a sensors.yaml:")
+                    print(f"      {set_config_key or set_id}:")
+                    print(f"        raised: {detected_raised}")
+            
+            # CASO 2: Hay raised declarados pero no coinciden con los detectados
+            elif declared_raised and detected_raised:
+                declared_set = set(declared_raised)
+                detected_set = set(detected_raised)
+                
+                if declared_set != detected_set:
+                    mismatched_raised.append((set_id, declared_raised, detected_raised))
+                    
+                    extra_declared = declared_set - detected_set
+                    missing_declared = detected_set - declared_set
+                    
+                    if verbose:
+                        print(f"\n⚠️  Set {set_id} (Ronda {round_num}): Discrepancia en sensores raised")
+                        print(f"   📝 Declarados en config: {declared_raised}")
+                        print(f"   📊 Detectados automáticamente: {detected_raised}")
+                        if extra_declared:
+                            print(f"   ❌ En config pero NO detectados: {sorted(extra_declared)}")
+                            print(f"      → Estos sensores NO aparecen en sets R{round_num+1}")
+                        if missing_declared:
+                            print(f"   ➕ Detectados pero NO en config: {sorted(missing_declared)}")
+                            print(f"      → Considera añadirlos a sensors.yaml")
+            
+            # CASO 3: Hay raised declarados pero ninguno fue detectado (posible error)
+            elif declared_raised and not detected_raised:
+                invalid_raised.append((set_id, declared_raised))
+                if verbose:
+                    print(f"\n❌ Set {set_id} (Ronda {round_num}): Raised declarados NO VÁLIDOS")
+                    print(f"   📝 Declarados: {declared_raised}")
+                    print(f"   ⚠️ NINGUNO aparece en sets de Ronda {round_num+1}")
+                    print(f"   💡 Verifica que los IDs sean correctos o que existan sets R{round_num+1}")
+        
+        all_valid = not missing_raised and not mismatched_raised and not invalid_raised
+        
+        if verbose:
+            print("\n" + "="*80)
+            if all_valid:
+                print("✅ VALIDACIÓN COMPLETA: Todos los sensores raised son correctos")
+            else:
+                print("⚠️  VALIDACIÓN COMPLETA: Se encontraron discrepancias")
+                print(f"   - Sets sin raised: {len(missing_raised)}")
+                print(f"   - Sets con discrepancias: {len(mismatched_raised)}")
+                print(f"   - Sets con raised inválidos: {len(invalid_raised)}")
+            print("="*80)
+        
+        return {
+            'missing_raised': missing_raised,
+            'mismatched_raised': mismatched_raised,
+            'invalid_raised': invalid_raised,
+            'all_valid': all_valid
+        }
     
     # ═════════════════════════════════════════════════════════════════════
     # MÉTODOS DE ALMACENAMIENTO Y RECUPERACIÓN DE OFFSETS
@@ -665,7 +908,7 @@ class CalibrationNetwork:
                 set_id = list(set_obj.runs_by_set.keys())[0]
                 sets_dict[set_id] = set_obj
             else:
-                logger.warning(f"Set object has no runs_by_set, skipping")
+                logger.warning("Set object has no runs_by_set, skipping")
         
         return cls(sets_dict, config=config, config_path=config_path)
 
@@ -686,7 +929,7 @@ class CalibrationNetwork:
         for edge in self.graph.edges(data=True):
             sensors = edge[2].get('sensors', [edge[2].get('sensor')] if 'sensor' in edge[2] else [])
             if sensors:
-                logger.info(f"  {edge[0]} ↔ {edge[1]}  (bridge sensors: {sensors})")
+                logger.info("  %s ↔ %s  (bridge sensors: %s)", edge[0], edge[1], sensors)
 
     # ------------------------------------------------------------------
     # FUNCTIONS FOR FINDING CONNECTIONS
@@ -697,10 +940,10 @@ class CalibrationNetwork:
         """
         try:
             path = nx.shortest_path(self.graph, source=set_a, target=set_b)
-            logger.info(f"Path found between {set_a} and {set_b}: {path}")
+            logger.info("Path found between %s and %s: %s", set_a, set_b, path)
             return path
         except nx.NetworkXNoPath:
-            logger.warning(f"No path exists between {set_a} and {set_b}")
+            logger.warning("No path exists between %s and %s", set_a, set_b)
             return []
 
     def find_sensor_set(self, sensor_id: int) -> Optional[Union[float, str]]:
@@ -745,7 +988,7 @@ class CalibrationNetwork:
                     d = -set_obj.calibration_constants.loc[sj_str, si_str]
                     e = set_obj.calibration_errors.loc[sj_str, si_str]
                 except KeyError:
-                    logger.warning(f"Could not find offset between {sensor_i} and {sensor_j} in set {set_i}")
+                    logger.warning("Could not find offset between %s and %s in set %s", sensor_i, sensor_j, set_i)
                     d, e = 0.0, 0.0
             return d, e
 
@@ -837,7 +1080,7 @@ class CalibrationNetwork:
         for set_id in logfile_df['CalibSetNumber'].dropna().unique():
             try:
                 set_id_int = int(float(set_id))
-            except Exception:
+            except (ValueError, TypeError):
                 continue
             
             # Verificar la ronda del set
@@ -846,7 +1089,7 @@ class CalibrationNetwork:
             
             try:
                 round_num = self._get_set_round(set_id_int)
-            except Exception:
+            except (KeyError, AttributeError):
                 continue
             
             if round_num != 1:
@@ -869,7 +1112,7 @@ class CalibrationNetwork:
             for val in sensor_values:
                 try:
                     sensor_values_int.append(int(float(val)))
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             
             if sensor_id in sensor_values_int:
@@ -917,7 +1160,7 @@ class CalibrationNetwork:
             for set_id in logfile_df['CalibSetNumber'].dropna().unique():
                 try:
                     set_id_int = int(float(set_id))
-                except Exception:
+                except (ValueError, TypeError, KeyError):
                     continue
                 
                 if set_id_int not in self.sets:
@@ -925,7 +1168,7 @@ class CalibrationNetwork:
                 
                 try:
                     round_num = self._get_set_round(set_id_int)
-                except Exception:
+                except (ValueError, TypeError, KeyError):
                     continue
                 
                 if round_num != next_round:
@@ -946,7 +1189,7 @@ class CalibrationNetwork:
                 for val in sensor_values:
                     try:
                         sensor_values_int.append(int(float(val)))
-                    except Exception:
+                    except (ValueError, TypeError):
                         pass
                 
                 if raised_sensor in sensor_values_int:
@@ -973,7 +1216,7 @@ class CalibrationNetwork:
                             try:
                                 first_sensor = int(float(val[0]))
                                 break
-                            except Exception:
+                            except (ValueError, TypeError):
                                 pass
                 
                 if first_sensor is not None:
@@ -1080,7 +1323,7 @@ class CalibrationNetwork:
         }
         
         if verbose:
-            print(f"\n🎯 RESULTADO FINAL:")
+            print("\n🎯 RESULTADO FINAL:")
             print(f"   Offset Total: {offset_total:.6f}")
             print(f"   Error Total:  {error_total:.6f}")
             print(f"   Expresión: {offset_total:.6f} ± {error_total:.6f}")
@@ -1140,7 +1383,7 @@ class CalibrationNetwork:
         for set_id in logfile_df['CalibSetNumber'].dropna().unique():
             try:
                 set_id_int = int(float(set_id))
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 continue
             
             if set_id_int not in self.sets:
@@ -1148,7 +1391,7 @@ class CalibrationNetwork:
             
             try:
                 round_num = self._get_set_round(set_id_int)
-            except Exception:
+            except (ValueError, TypeError, KeyError):
                 continue
             
             if round_num != 1:
@@ -1168,7 +1411,7 @@ class CalibrationNetwork:
             for val in sensor_values:
                 try:
                     sensor_values_int.append(int(float(val)))
-                except Exception:
+                except (ValueError, TypeError):
                     pass
             
             if sensor_id in sensor_values_int:
@@ -1219,7 +1462,7 @@ class CalibrationNetwork:
             
             if not chain or len(chain) < 2:
                 if verbose:
-                    print(f"   ⚠️ No se pudo construir cadena completa")
+                    print("   ⚠️ No se pudo construir cadena completa")
                 continue
             
             # Calcular offset para este camino
@@ -1227,7 +1470,7 @@ class CalibrationNetwork:
             
             if offset is None:
                 if verbose:
-                    print(f"   ⚠️ No se pudo calcular offset")
+                    print("   ⚠️ No se pudo calcular offset")
                 continue
             
             path_info = {
@@ -1247,20 +1490,20 @@ class CalibrationNetwork:
         
         if not all_paths:
             if verbose:
-                print(f"\n⚠️ No se pudo calcular ningún camino válido")
+                print("\n⚠️ No se pudo calcular ningún camino válido")
             return None, None, {}
         
         if verbose:
-            print(f"\n" + "="*80)
-            print(f"📊 RESUMEN DE CAMINOS CALCULADOS")
-            print(f"="*80)
+            print("\n" + "="*80)
+            print("📊 RESUMEN DE CAMINOS CALCULADOS")
+            print("="*80)
             print(f"   Total de caminos válidos: {len(all_paths)}/{len(all_raised_sensors)}")
         
         # 4. Identificar el camino con menor error
         best_path = min(all_paths, key=lambda p: p['error'])
         
         if verbose:
-            print(f"\n🏆 MEJOR CAMINO (menor error):")
+            print("\n🏆 MEJOR CAMINO (menor error):")
             print(f"   Camino #{best_path['path_id']}: Sensor raised {best_path['raised_sensor']}")
             print(f"   Offset: {best_path['offset']:.6f} ± {best_path['error']:.6f}")
         
@@ -1270,8 +1513,8 @@ class CalibrationNetwork:
         weighted_offsets = []
         
         if verbose:
-            print(f"\n⚖️  CÁLCULO DE MEDIA PONDERADA:")
-            print(f"   Fórmula: w_i = 1 / error_i²")
+            print("\n⚖️  CÁLCULO DE MEDIA PONDERADA:")
+            print("   Fórmula: w_i = 1 / error_i²")
         
         for path in all_paths:
             weight = 1.0 / (path['error'] ** 2)
@@ -1288,7 +1531,7 @@ class CalibrationNetwork:
         error_weighted = 1.0 / np.sqrt(sum_weights)
         
         if verbose:
-            print(f"\n🎯 RESULTADO FINAL (MEDIA PONDERADA):")
+            print("\n🎯 RESULTADO FINAL (MEDIA PONDERADA):")
             print(f"   Offset ponderado: {offset_weighted:.6f}")
             print(f"   Error ponderado:  {error_weighted:.6f}")
             print(f"   Expresión: {offset_weighted:.6f} ± {error_weighted:.6f}")
@@ -1296,7 +1539,7 @@ class CalibrationNetwork:
             # Comparar con el mejor camino
             diff_offset = abs(offset_weighted - best_path['offset'])
             diff_error = abs(error_weighted - best_path['error'])
-            print(f"\n📈 COMPARACIÓN CON MEJOR CAMINO:")
+            print("\n📈 COMPARACIÓN CON MEJOR CAMINO:")
             print(f"   Diferencia en offset: {diff_offset:.6f}")
             print(f"   Diferencia en error:  {diff_error:.6f}")
             
@@ -1360,7 +1603,7 @@ class CalibrationNetwork:
             for set_id in logfile_df['CalibSetNumber'].dropna().unique():
                 try:
                     set_id_int = int(float(set_id))
-                except Exception:
+                except (ValueError, TypeError, KeyError):
                     continue
                 
                 if set_id_int not in self.sets:
@@ -1368,7 +1611,7 @@ class CalibrationNetwork:
                 
                 try:
                     round_num = self._get_set_round(set_id_int)
-                except Exception:
+                except (ValueError, TypeError, KeyError):
                     continue
                 
                 if round_num != next_round:
@@ -1388,7 +1631,7 @@ class CalibrationNetwork:
                 for val in sensor_values:
                     try:
                         sensor_values_int.append(int(float(val)))
-                    except Exception:
+                    except (ValueError, TypeError):
                         pass
                 
                 if raised_sensor in sensor_values_int:
@@ -1409,7 +1652,7 @@ class CalibrationNetwork:
                             try:
                                 first_sensor = int(float(val[0]))
                                 break
-                            except Exception:
+                            except (ValueError, TypeError):
                                 pass
                 
                 if first_sensor is not None:
@@ -1461,7 +1704,7 @@ class CalibrationNetwork:
         plt.tight_layout()
         plt.savefig(filename, dpi=150)
         plt.close()
-        logger.info(f"Graph exported to {filename}")
+        logger.info("Graph exported to %s", filename)
 
             # ------------------------------------------------------------------
     # CALCULO DE OFFSET ABSOLUTO HACIA SENSOR DE REFERENCIA DEL SET DE MAYOR RONDA
@@ -1513,7 +1756,7 @@ class CalibrationNetwork:
                     df_ref = getattr(self.sets[ref_set], "calibration_constants", None)
                     if df_ref is not None and not df_ref.empty:
                         ref_sensor = df_ref.index[0]
-                        logger.info(f"Set {ref_set} es Ronda 3 (referencia absoluta): usando primer sensor {ref_sensor}")
+                        logger.info("Set %s es Ronda 3 (referencia absoluta): usando primer sensor %s", ref_set, ref_sensor)
                     else:
                         raise RuntimeError(f"Set {ref_set} (Ronda 3) no tiene calibration_constants disponibles")
                 else:
@@ -1522,14 +1765,14 @@ class CalibrationNetwork:
         # Guardamos el sensor de referencia para usos futuros
         self.reference_sensor = ref_sensor
         self.reference_set = ref_set
-        logger.info(f"Usando sensor de referencia absoluta {ref_sensor} del set {ref_set} (ronda {round_by_set.get(ref_set, '?')})")
+        logger.info("Usando sensor de referencia absoluta %s del set %s (ronda %s)", ref_sensor, ref_set, round_by_set.get(ref_set, '?'))
 
         # --- 3. Encontrar el set del sensor de entrada ---
         set_i = self.find_sensor_set(sensor_id)
         if set_i is None:
             raise ValueError(f"No se encontró el set que contiene el sensor {sensor_id}")
         if set_i == ref_set:
-            logger.info(f"Sensor {sensor_id} ya está en el set de referencia {ref_set}")
+            logger.info("Sensor %d ya está en el set de referencia %s", sensor_id, ref_set)
             return 0.0, 0.0, [{"info": f"sensor {sensor_id} ya está en el set de referencia"}]
 
         current_round = round_by_set.get(set_i, 1)
@@ -1550,7 +1793,7 @@ class CalibrationNetwork:
                 try:
                     return -df.loc[str(j), str(i)]
                 except KeyError:
-                    logger.warning(f"No se encontró offset entre {i} y {j} en la matriz")
+                    logger.warning("No se encontró offset entre %s y %s en la matriz", i, j)
                     return 0.0
 
         # --- 5. Ir subiendo ronda a ronda hasta llegar al set de referencia ---
@@ -1603,7 +1846,7 @@ class CalibrationNetwork:
                         sensors_str = [str(x) for x in sensors_in_next]
                         if bridge_str in sensors_str:
                             next_set = s
-                            logger.info(f"Encontrado sensor puente {bridge} en Set {s} (Ronda {next_round}, referencia)")
+                            logger.info("Encontrado sensor puente %s en Set %s (Ronda %s, referencia)", bridge, s, next_round)
                             break
                 else:
                     # Para Rondas 1-2, buscar en raised (lógica original)

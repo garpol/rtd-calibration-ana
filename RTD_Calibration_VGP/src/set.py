@@ -5,10 +5,14 @@ import matplotlib.pyplot as plt
 from matplotlib.cm import get_cmap
 from typing import Literal
 import numpy as np
-from .run import Run
+try:
+    from .run import Run
+    from .utils import load_config, DEFAULT_CONFIG
+except ImportError:
+    from run import Run
+    from utils import load_config, DEFAULT_CONFIG
 import yaml
 from typing import Optional
-from .utils import load_config, DEFAULT_CONFIG
 
 # Module-level default sensors (fallback) - kept here for backward compatibility but can be moved to config
 DEFAULT_SENSORS = {
@@ -259,11 +263,16 @@ class Set:
         marked as 'BAD' in the Selection column.
         """
         try:
+            import numpy as np
+            # Usar .copy() para evitar SettingWithCopyWarning
+            self.logfile = self.logfile.copy()
             self.logfile["CalibSetNumber"] = pd.to_numeric(self.logfile["CalibSetNumber"], errors='coerce')
             calib_set_numbers = self.logfile["CalibSetNumber"].unique()
             calib_set_numbers = sorted([
                 calib_set_number for calib_set_number in calib_set_numbers
-                if isinstance(calib_set_number, (int, float)) and float(calib_set_number).is_integer()
+                if isinstance(calib_set_number, (int, float, np.integer, np.floating)) 
+                and not pd.isna(calib_set_number)
+                and float(calib_set_number).is_integer()
                 and calib_set_number > 0
                 and len(str(int(calib_set_number))) <= 2  # Verify that the number has two or fewer digits
             ])
@@ -284,7 +293,8 @@ class Set:
                     selection = run_row["Selection"]
 
                     if isinstance(filename, str) and all(keyword not in filename.lower() for keyword in excluded_keywords):
-                        if selection != "BAD":  # Verify that the run is not marked as 'BAD'
+                        # Include runs where Selection is not 'BAD' (including NaN/empty values)
+                        if pd.isna(selection) or selection != "BAD":
                             run_instance = Run(filename, self.logfile)
                             # Try to associate sensors, read run info, and filter faulty channels
                             try:
@@ -319,6 +329,107 @@ class Set:
             
         except Exception as e:
             raise RuntimeError(f"Error grouping runs: {e}")
+
+    def get_reference_sensors_for_set(self, calib_set_number: float) -> dict:
+        """
+        Get reference sensor information for a specific set.
+        
+        Returns a dict with aggregated reference sensor info from all runs in the set:
+        {
+            'ref_sensor_ids': set of all reference sensor IDs found across runs,
+            'runs_with_refs': list of (filename, [ref_ids]) tuples
+        }
+        
+        Reference sensors (channels 13-14) are repeated across sets for monitoring
+        and should NOT be considered as "raised" sensors or part of the calibration tree.
+        """
+        result = {
+            'ref_sensor_ids': set(),
+            'runs_with_refs': []
+        }
+        
+        if calib_set_number not in self.runs_by_set:
+            return result
+            
+        runs_in_set = self.runs_by_set[calib_set_number]
+        
+        for filename, run_instance in runs_in_set.items():
+            try:
+                ref_ids = run_instance.get_reference_sensor_ids()
+                if ref_ids:
+                    result['ref_sensor_ids'].update(ref_ids)
+                    result['runs_with_refs'].append((filename, ref_ids))
+            except AttributeError:
+                # Run object doesn't have get_reference_sensor_ids method (older version)
+                pass
+                
+        return result
+    
+    def get_all_reference_sensors(self) -> dict:
+        """
+        Get reference sensor information for all sets.
+        
+        Returns dict mapping CalibSetNumber -> reference sensor info:
+        {
+            set_num: {
+                'ref_sensor_ids': set of reference sensor IDs,
+                'runs_with_refs': list of (filename, [ref_ids])
+            }
+        }
+        """
+        all_refs = {}
+        
+        for calib_set_number in self.runs_by_set.keys():
+            refs = self.get_reference_sensors_for_set(calib_set_number)
+            if refs['ref_sensor_ids']:  # Only include sets that have reference sensors
+                all_refs[calib_set_number] = refs
+                
+        return all_refs
+    
+    def export_reference_sensors_to_yaml(self, output_path: str = "reference_sensors.yaml") -> None:
+        """
+        Export reference sensor information to a YAML file.
+        
+        Creates a YAML file with reference sensor IDs for each set that has them.
+        
+        Args:
+            output_path: Path where the YAML file will be saved
+            
+        Example output:
+            reference_sensors:
+              3:
+                ref1_id: 48176
+                ref2_id: 48177
+              4:
+                ref1_id: 48176
+                ref2_id: 48177
+        """
+        all_refs = self.get_all_reference_sensors()
+        
+        if not all_refs:
+            print("No reference sensors found to export")
+            return
+        
+        # Build export structure
+        export_data = {'reference_sensors': {}}
+        
+        for set_num, ref_info in all_refs.items():
+            ref_ids = sorted(ref_info['ref_sensor_ids'])
+            
+            if len(ref_ids) >= 1:
+                export_data['reference_sensors'][int(set_num)] = {
+                    'ref1_id': ref_ids[0] if len(ref_ids) > 0 else None,
+                    'ref2_id': ref_ids[1] if len(ref_ids) > 1 else None,
+                }
+        
+        # Write to YAML
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                yaml.dump(export_data, f, default_flow_style=False, allow_unicode=True, sort_keys=True)
+            print(f"✅ Reference sensors exported to: {output_path}")
+            print(f"   Sets with references: {len(export_data['reference_sensors'])}")
+        except Exception as e:
+            print(f"❌ Error exporting to YAML: {e}")
 
     def calculate_offsets_and_rms(self, selected_sets=None) -> None:
         """
