@@ -29,14 +29,7 @@ dist/
 # Git LFS attributes file (if later used)
 .gitattributes
 
-# FBG Sensitivity Analysis - Exclude old/backup notebooks
-2xAnalysis*.ipynb
-Analysis\ Sens\ Press\ 10-03-2025.ipynb
-Analysis\ Sens\ Press\ 15-05-2025*.ipynb
-Analysis\ Sens\ Press\ 27-02-2025.ipynb
-Analysis\ Sens\ Press\ 28-02-2025.ipynb
-PEEK*.ipynb
-calc_sensit*.ipynb
+# FBG Sensitivity Analysis - all notebooks now in FBG_Sensitivity_Analysis/
 
 # Temporary scripts
 GITHUB_SETUP.md
