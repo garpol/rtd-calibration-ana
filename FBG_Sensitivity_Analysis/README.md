@@ -2,7 +2,25 @@
 
 Herramienta para análisis de sensibilidad térmica de sensores FBG (Fiber Bragg Grating) en experimentos de presión con fibra PEEK-7.
 
-## 📋 Características
+## � Estructura de Archivos
+
+### Scripts Principales
+- **`fbg_press_sensitivity_analysis.py`** - Script principal/librería con todas las funciones
+- **`test_analysis_script.ipynb`** - Notebook con ejemplos de uso y tests
+- **`install_dependencies.sh`** - Script para instalar dependencias
+
+### Notebooks de Análisis
+- **`NUEVO_Analysis Sens Press 10-03-2025.ipynb`** - Análisis completo del experimento 10-03-2025
+- **`find_plateus.ipynb`** - Ejemplos de detección automática de plateaus
+
+### Documentación
+- **`README.md`** - Este archivo (documentación principal)
+- **`QUICK_START.md`** - Guía rápida de inicio con ejemplos
+
+### Datos
+- **`plateaus_20250515.json`** - Definiciones de plateaus guardadas
+
+## �📋 Características
 
 - **Carga automática** de archivos ROOT con datos de FBG y RTD
 - **Filtrado automático** de wavelength usando método μ±3σ

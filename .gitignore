@@ -28,3 +28,20 @@ dist/
 
 # Git LFS attributes file (if later used)
 .gitattributes
+
+# FBG Sensitivity Analysis - Exclude old/backup notebooks
+2xAnalysis*.ipynb
+Analysis\ Sens\ Press\ 10-03-2025.ipynb
+Analysis\ Sens\ Press\ 15-05-2025*.ipynb
+Analysis\ Sens\ Press\ 27-02-2025.ipynb
+Analysis\ Sens\ Press\ 28-02-2025.ipynb
+PEEK*.ipynb
+calc_sensit*.ipynb
+
+# Temporary scripts
+GITHUB_SETUP.md
+push_to_github.sh
+
+# Python cache
+__pycache__/
+*.pyc
