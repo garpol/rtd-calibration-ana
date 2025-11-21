@@ -525,7 +525,7 @@ class DewarPlotter:
         return fig
 
 
-def quick_analysis(file_path: str, date: str, start_hour: int, end_hour: int,
+def quick_analysis(file_path: str, date: str, start_hour: float, end_hour: float,
                    sensor_idx: int = 2, resample_interval: str = "5min"):
     """
     Quick analysis function for a single sensor.
@@ -536,10 +536,10 @@ def quick_analysis(file_path: str, date: str, start_hour: int, end_hour: int,
         Path to ROOT file
     date : str
         Date string (e.g., "2025-11-19")
-    start_hour : int
-        Start hour (e.g., 16)
-    end_hour : int
-        End hour (e.g., 18)
+    start_hour : float
+        Start hour - supports decimals (e.g., 16 or 16.5 for 16:30)
+    end_hour : float
+        End hour - supports decimals (e.g., 18 or 18.75 for 18:45)
     sensor_idx : int
         0-based sensor index (default: 2 for Sensor 3)
     resample_interval : str
@@ -547,8 +547,15 @@ def quick_analysis(file_path: str, date: str, start_hour: int, end_hour: int,
     """
     # Parse date
     year, month, day = map(int, date.split('-'))
-    start_time = datetime.datetime(year, month, day, start_hour, 0, 0)
-    end_time = datetime.datetime(year, month, day, end_hour, 0, 0)
+    
+    # Convert decimal hours to hour + minute
+    start_hour_int = int(start_hour)
+    start_min_int = int((start_hour % 1) * 60)
+    end_hour_int = int(end_hour)
+    end_min_int = int((end_hour % 1) * 60)
+    
+    start_time = datetime.datetime(year, month, day, start_hour_int, start_min_int, 0)
+    end_time = datetime.datetime(year, month, day, end_hour_int, end_min_int, 0)
     
     # Load data
     loader = DewarDataLoader(file_path)
@@ -566,17 +573,18 @@ def quick_analysis(file_path: str, date: str, start_hour: int, end_hour: int,
     # Plot
     plotter = DewarPlotter()
     sensor_name = f"Sensor {sensor_idx+1}"
-    title_suffix = f"({start_hour}:00–{end_hour}:00 {date})"
+    title_suffix = f"({start_hour_int}:{start_min_int:02d}–{end_hour_int}:{end_min_int:02d} {date})"
     
-    fig1 = plotter.plot_time_series(peak_res, temp_res, sensor_name, title_suffix)
+    plotter.plot_time_series(peak_res, temp_res, sensor_name, title_suffix)
     plt.show()
     
-    fig2 = plotter.plot_wavelength_vs_temperature(fit_results, sensor_name, title_suffix)
+    plotter.plot_wavelength_vs_temperature(fit_results, sensor_name, title_suffix)
     plt.show()
     
     # Print results
     print(f"\n{'='*50}")
     print(f"ANALYSIS RESULTS - {sensor_name}")
+    print(f"Time window: {start_hour_int}:{start_min_int:02d} - {end_hour_int}:{end_min_int:02d}")
     print(f"{'='*50}")
     print(f"Slope: {fit_results['slope_mK_pm']:.2f} mK/pm")
     print(f"Intercept: {fit_results['intercept_K']:.2f} K")
