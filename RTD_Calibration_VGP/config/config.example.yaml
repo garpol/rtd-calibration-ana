@@ -1,0 +1,22 @@
+paths:
+  logfile: RTD_Calibration_VGP/data/LogFile_smoke.csv
+  logfile_parsed: RTD_Calibration_VGP/data/LogFile_smoke_parsed.csv
+  data_dir: RTD_Calibration_VGP/data/temperature_files
+  plots_dir: RTD_Calibration_VGP/plots
+
+selection:
+  selected_sets: [1]
+  require_integer_calibset: true
+
+output:
+  write_csv: false
+  write_excel: false
+  calibration_excel_name: calibration_constants_and_errors_smoke.xlsx
+
+sensors:
+  # lightweight per-set example
+  sets:
+    1:
+      discarded: []
+      raised: []
+      round: 1
