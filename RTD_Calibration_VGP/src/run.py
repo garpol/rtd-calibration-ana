@@ -46,9 +46,7 @@ class Run:
     def load_temperature_file(self) -> "Run":
         """Locate and load the temperature data file into self.temperature_data.
 
-        Search order:
-        - repository-local: RTD_Calibration_VGP/data/temperature_files
-        - CERNBox: /eos/user/j/jcapotor/RTDdata/
+        Searches in: RTD_Calibration_VGP/data/temperature_files (recursively)
 
         The expected file is tab-separated with no header. Columns are: Date, Time, channel_1..channel_14.
         Values outside 60–350 K are set to NaN. Columns with many NaNs are recorded and left as NaN.
@@ -62,11 +60,10 @@ class Run:
             candidates = glob.glob(os.path.join(str(local_base), "**", self.filename + ".txt"), recursive=True)
 
         if not candidates:
-            cern_path = "/eos/user/j/jcapotor/RTDdata/"
-            candidates = glob.glob(os.path.join(cern_path, "**", self.filename + ".txt"), recursive=True)
-
-        if not candidates:
-            raise FileNotFoundError(f"Temperature file '{self.filename}' not found in local data nor CERNBox.")
+            raise FileNotFoundError(
+                f"Temperature file '{self.filename}.txt' not found in {local_base}.\n"
+                f"Make sure data files are placed under RTD_Calibration_VGP/data/temperature_files/"
+            )
 
         self.path_to_file = candidates[0]
         print(f"Temperature file found: {self.path_to_file}")
@@ -188,7 +185,9 @@ class Run:
     def read_run_info(self) -> None:
         """Read run-level metadata from the logfile for this filename.
 
-        Extracts CalibSetNumber, Date, N_Run and some reference sensor IDs when available.
+        Extracts CalibSetNumber, Date, N_Run and reference sensor information.
+        Reference sensors (REF1, REF2) are typically in channels 13-14 and are
+        NOT part of the calibration tree - they are external references.
         """
         matching_row = self.logfile[self.logfile["Filename"] == self.filename]
         if matching_row.empty:
@@ -204,10 +203,23 @@ class Run:
             except Exception:
                 return None
 
+        # Extract reference sensor information from dedicated columns
+        ref1_id = to_int_safe(matching_row.get("REF1_ID", pd.Series([None])).iloc[0])
+        ref2_id = to_int_safe(matching_row.get("REF2_ID", pd.Series([None])).iloc[0])
+        ref1_chan = matching_row.get("REF1_CHAN", pd.Series([None])).iloc[0]
+        ref2_chan = matching_row.get("REF2_CHAN", pd.Series([None])).iloc[0]
+        n_ref1 = to_int_safe(matching_row.get("N_Ref1", pd.Series([None])).iloc[0])
+        n_ref2 = to_int_safe(matching_row.get("N_Ref2", pd.Series([None])).iloc[0])
+        
+        # For backward compatibility, also check S19/S20 if REF columns don't exist
+        if ref1_id is None:
+            ref1_id = to_int_safe(matching_row.get("S19", pd.Series([None])).iloc[0])
+        if ref2_id is None:
+            ref2_id = to_int_safe(matching_row.get("S20", pd.Series([None])).iloc[0])
+
+        # Extract first and last calibration sensor (typically S7 and S18 for 12 sensors)
         first_sensor = to_int_safe(matching_row.get("S7", pd.Series([None])).iloc[0])
         last_sensor = to_int_safe(matching_row.get("S18", pd.Series([None])).iloc[0])
-        ref1 = to_int_safe(matching_row.get("S19", pd.Series([None])).iloc[0])
-        ref2 = to_int_safe(matching_row.get("S20", pd.Series([None])).iloc[0])
 
         self.run_info = {
             "CalibSetNumber": calib_set,
@@ -215,9 +227,36 @@ class Run:
             "N_Run": n_run,
             "First_Sensor_ID": first_sensor,
             "Last_Sensor_ID": last_sensor,
-            "Ref_Sensor_1": ref1,
-            "Ref_Sensor_2": ref2,
+            "Ref1_ID": ref1_id,
+            "Ref2_ID": ref2_id,
+            "Ref1_Channel": ref1_chan,
+            "Ref2_Channel": ref2_chan,
+            "N_Ref1": n_ref1,
+            "N_Ref2": n_ref2,
         }
+
+    def get_reference_sensor_ids(self) -> list:
+        """Get the IDs of reference sensors (channels 13-14, typically REF1 and REF2).
+        
+        These sensors are NOT part of the calibration tree and should be excluded
+        from raised sensor detection and offset calculations.
+        
+        Returns:
+            list: List of reference sensor IDs (excluding None values)
+        """
+        if self.run_info is None:
+            self.read_run_info()
+        
+        ref_ids = []
+        ref1 = self.run_info.get("Ref1_ID")
+        ref2 = self.run_info.get("Ref2_ID")
+        
+        if ref1 is not None:
+            ref_ids.append(ref1)
+        if ref2 is not None:
+            ref_ids.append(ref2)
+        
+        return ref_ids
 
     def format_datetime_axis(self, ax) -> None:
         """Format a matplotlib axis to show day and hour:minute every 10 minutes."""

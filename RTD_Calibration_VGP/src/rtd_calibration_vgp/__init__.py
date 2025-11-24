@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 _pkg_src = Path(__file__).parent.parent  # points to RTD_Calibration_VGP/src
-_modules = ['logfile', 'run', 'set', 'utils']
+# Load utils first since other modules depend on it
+_modules = ['utils', 'logfile', 'run', 'set']
 
 for _m in _modules:
     _path = _pkg_src / f"{_m}.py"
@@ -21,17 +22,12 @@ for _m in _modules:
         globals()[_m] = module
 
 # Re-export common names for convenience
-try:
-    from .logfile import Logfile  # type: ignore
-except Exception:
-    pass
-try:
-    from .run import Run  # type: ignore
-except Exception:
-    pass
-try:
-    from .set import Set  # type: ignore
-except Exception:
-    pass
+# Access classes from the dynamically loaded modules (loaded in the loop above)
+if 'logfile' in globals():
+    Logfile = globals()['logfile'].Logfile
+if 'run' in globals():
+    Run = globals()['run'].Run
+if 'set' in globals():
+    Set = globals()['set'].Set
 
 __all__ = ['Logfile', 'Run', 'Set']

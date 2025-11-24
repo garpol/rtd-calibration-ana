@@ -5,17 +5,28 @@ import os
 import numpy as np
 import glob
 from datetime import datetime
+from pathlib import Path
 
 class Run:
-    def __init__(self, filename: str, logfile: pd.DataFrame) -> None:
+    def __init__(self, filename: str, logfile: pd.DataFrame, tmin: int = None, tmax: int = None, show_references: bool = True) -> None:
         """
         Clase que asocia los canales de temperatura de un archivo con los IDs de sensores del logfile.
+        
+        Args:
+            filename: Nombre del archivo de temperatura
+            logfile: DataFrame con el LogFile completo
+            tmin: Tiempo inicial en minutos desde el inicio del run (None = últimos 20 min)
+            tmax: Tiempo final en minutos desde el inicio del run (None = hasta el final)
+            show_references: Si True muestra los 14 canales, si False solo los 12 primeros (corona, sin referencias)
         """
         self.filename = filename
         self.logfile = logfile
         self.temperature_data = None
         self.sensor_mapping = None
         self.path_to_file = None
+        self.tmin = tmin  # Tiempo en minutos
+        self.tmax = tmax  # Tiempo en minutos
+        self.show_references = show_references  # Controla si se muestran canales 13 y 14 (referencias)
 
         # Filtrar el archivo y los datos
         self.load_temperature_file()
@@ -25,19 +36,21 @@ class Run:
 
     def load_temperature_file(self) -> None:
         """
-        Busca y carga el archivo de datos de temperatura en CERNBox. Reemplaza con NaN los datos inválidos.
+        Busca y carga el archivo de datos de temperatura desde data/temperature_files/. Reemplaza con NaN los datos inválidos.
         """
         try:
-            
-            #path = "/eos/user/j/jcapotor/RTDdata/Data/Frame_Sensors/"  # Ruta de CERNBox
-            # Ruta local a los archivos de temperatura en tu Mac
-            path = "/Users/vicky/Desktop/rtd-calibration-ana/RTD_Calibration_VGP/data/temperature_files"
+            # Determine repository root and local data path
+            repo_root = Path(__file__).parents[1].resolve()
+            local_base = repo_root / "data" / "temperature_files"
 
             # Buscar el archivo .txt que coincida con el filename
-            text_file = glob.glob(os.path.join(path, "**", self.filename + ".txt"), recursive=True)
+            text_file = glob.glob(os.path.join(str(local_base), "**", self.filename + ".txt"), recursive=True)
 
             if not text_file:
-                raise FileNotFoundError(f"No se encontró el archivo '{self.filename}' en '{path}'.")
+                raise FileNotFoundError(
+                    f"No se encontró el archivo '{self.filename}.txt' en {local_base}.\n"
+                    f"Asegúrate de colocar los archivos de datos en RTD_Calibration_VGP/data/temperature_files/"
+                )
 
             self.path_to_file = text_file[0]
             print(f"Archivo de temperatura encontrado: {self.path_to_file}")
@@ -138,51 +151,61 @@ class Run:
         except Exception as e:
             print(f"Error al cargar el archivo de temperatura: {e}")
             self.temperature_data = pd.DataFrame()  # Vacía si ocurre un error
-            
-   
+
     def associate_sensors(self) -> None:
-            """
-            Asocia cada canal del archivo de temperatura con los IDs de sensores RTD del Logfile.
-            """
-            try:
-                if self.temperature_data.empty:
-                    raise ValueError("No se han cargado datos de temperatura.")
+        """
+        Asocia cada canal del archivo de temperatura con los IDs de sensores RTD del Logfile.
+        """
+        try:
+            if self.temperature_data.empty:
+                raise ValueError("No se han cargado datos de temperatura.")
 
-                # Filtrar el logfile para obtener la fila del filename en cuestión
-                matching_row = self.logfile[self.logfile["Filename"] == self.filename]
+            # Filtrar el logfile para obtener la fila del filename en cuestión
+            matching_row = self.logfile[self.logfile["Filename"] == self.filename]
 
-                if matching_row.empty:
-                    raise ValueError(f"No se encontró el filename '{self.filename}' en el logfile.")
+            if matching_row.empty:
+                raise ValueError(f"No se encontró el filename '{self.filename}' en el logfile.")
 
-                # Extraer los IDs de sensores de las columnas S7 a S20 (ignorando huecos vacíos con .dropna().values
-                sensor_columns = [f"S{i}" for i in range(1, 21)]
-                #print(f"Columnas de sensores a procesar: {sensor_columns}")
-                
-                #print(f"Fila de datos antes de extraer los IDs:\n{matching_row[sensor_columns]}")
-                sensor_ids = matching_row.loc[:, sensor_columns].iloc[0].dropna().values
-                print(f"Valores de sensores extraídos (antes de filtrado y conversión): {sensor_ids}")
+            # Extraer los IDs de sensores de las columnas S7 a S20 (ignorando huecos vacíos con .dropna().values
+            sensor_columns = [f"S{i}" for i in range(1, 21)]
+            #print(f"Columnas de sensores a procesar: {sensor_columns}")
+            
+            #print(f"Fila de datos antes de extraer los IDs:\n{matching_row[sensor_columns]}")
+            sensor_ids = matching_row.loc[:, sensor_columns].iloc[0].dropna().values
+            print(f"Valores de sensores extraídos (antes de filtrado y conversión): {sensor_ids}")
 
-                # Convertir los IDs a string (añadimos el if)
-                #sensor_ids = [str(int(sensor_id)) for sensor_id in sensor_ids if str(sensor_id).isdigit()]
-                #print(f"IDs de sensores después de la conversión: {sensor_ids}")
-                
-                # Convertir los IDs a string, primero redondeando los valores a enteros
-                sensor_ids = [str(int(sensor_id)) for sensor_id in sensor_ids if isinstance(sensor_id, (int, float)) and sensor_id.is_integer()]
-                print(f"IDs de sensores después de la conversión: {sensor_ids}")
+            # Convertir los IDs a string (añadimos el if)
+            #sensor_ids = [str(int(sensor_id)) for sensor_id in sensor_ids if str(sensor_id).isdigit()]
+            #print(f"IDs de sensores después de la conversión: {sensor_ids}")
+            
+            # Convertir los IDs a string
+            # Maneja tanto IDs numéricos (RTD) como alfanuméricos (resistencias PDHD-HP-X)
+            converted_ids = []
+            for sensor_id in sensor_ids:
+                if isinstance(sensor_id, (int, float)):
+                    # IDs numéricos: convertir a entero si es posible
+                    try:
+                        converted_ids.append(str(int(sensor_id)))
+                    except (ValueError, OverflowError):
+                        converted_ids.append(str(sensor_id))
+                else:
+                    # IDs alfanuméricos (resistencias): mantener como string
+                    converted_ids.append(str(sensor_id))
+            sensor_ids = converted_ids
+            print(f"IDs de sensores después de la conversión: {sensor_ids}")
 
+            # Asociar IDs con canales
+            channels = [f"channel_{i}" for i in range(1, 15)]
+            self.sensor_mapping = dict(zip(channels, sensor_ids))
 
-                # Asociar IDs con canales
-                channels = [f"channel_{i}" for i in range(1, 15)]
-                self.sensor_mapping = dict(zip(channels, sensor_ids))
+            print("Asociación de canales con IDs de sensores:")
+            for channel, sensor_id in self.sensor_mapping.items():
+                print(f"{channel}: Sensor ID {sensor_id}")
 
-                print("Asociación de canales con IDs de sensores:")
-                for channel, sensor_id in self.sensor_mapping.items():
-                    print(f"{channel}: Sensor ID {sensor_id}")
-
-                # Renombrar las columnas del archivo de temperatura con los IDs de sensores
-                self.temperature_data = self.temperature_data.rename(columns=self.sensor_mapping)
-            except Exception as e:
-                print(f"Error al asociar sensores con canales: {e}")
+            # Renombrar las columnas del archivo de temperatura con los IDs de sensores
+            self.temperature_data = self.temperature_data.rename(columns=self.sensor_mapping)
+        except Exception as e:
+            print(f"Error al asociar sensores con canales: {e}")
                 
     def filter_faulty_channels(self, min_temp: float = 70, max_temp: float = 320) -> None:
         """
@@ -248,12 +271,24 @@ class Run:
             ref_sensor_1 = matching_row["S19"].iloc[0]
             ref_sensor_2 = matching_row["S20"].iloc[0]
             
-                # Convertir los valores de los sensores a enteros (sin decimales)
-            # Utilizamos int() y verificamos si el valor es un número antes de convertirlo
-            first_sensor_id = int(float(first_sensor_id)) if isinstance(first_sensor_id, (int, float)) and not isinstance(first_sensor_id, bool) else None
-            last_sensor_id = int(float(last_sensor_id)) if isinstance(last_sensor_id, (int, float)) and not isinstance(last_sensor_id, bool) else None
-            ref_sensor_1 = int(float(ref_sensor_1)) if isinstance(ref_sensor_1, (int, float)) and not isinstance(ref_sensor_1, bool) else None
-            ref_sensor_2 = int(float(ref_sensor_2)) if isinstance(ref_sensor_2, (int, float)) and not isinstance(ref_sensor_2, bool) else None
+            # Convertir los valores de los sensores manejando tanto IDs numéricos como alfanuméricos
+            def convert_sensor_id(sensor_id):
+                """Convierte sensor ID a formato apropiado (int para RTD, str para resistencias)"""
+                if pd.isna(sensor_id):
+                    return None
+                if isinstance(sensor_id, (int, float)):
+                    try:
+                        return int(sensor_id)
+                    except (ValueError, OverflowError):
+                        return str(sensor_id)
+                else:
+                    # ID alfanumérico (resistencias)
+                    return str(sensor_id)
+            
+            first_sensor_id = convert_sensor_id(first_sensor_id)
+            last_sensor_id = convert_sensor_id(last_sensor_id)
+            ref_sensor_1 = convert_sensor_id(ref_sensor_1)
+            ref_sensor_2 = convert_sensor_id(ref_sensor_2)
 
             # Almacenar la información del run en el atributo `run_info`
             self.run_info = {
@@ -289,18 +324,44 @@ class Run:
         ax.xaxis.set_major_locator(mdates.MinuteLocator(interval=10))  # Marca cada 10 minutos
         plt.setp(ax.get_xticklabels(), rotation=45, ha="right")  # Rotar etiquetas para legibilidad
 
+    def _calculate_time_window(self):
+        """
+        Calcula los tiempos inicial y final para el análisis.
+        Si tmin/tmax no están especificados, usa los últimos 20 minutos del run.
+        
+        Returns:
+            tuple: (time_start, time_20min, time_40min) como timestamps
+        """
+        time_start = self.temperature_data.index.min()
+        time_max = self.temperature_data.index.max()
+        
+        # Si no se especificaron tiempos, usar los últimos 20 minutos
+        if self.tmin is None and self.tmax is None:
+            # Últimos 20 minutos del run
+            time_40min = time_max
+            time_20min = time_max - pd.Timedelta(minutes=20)
+        else:
+            # Usar los tiempos especificados (en minutos desde el inicio)
+            if self.tmin is not None:
+                time_20min = time_start + pd.Timedelta(minutes=self.tmin)
+            else:
+                time_20min = time_start + pd.Timedelta(minutes=20)  # Default 20 min
+            
+            if self.tmax is not None:
+                time_40min = time_start + pd.Timedelta(minutes=self.tmax)
+            else:
+                time_40min = time_max  # Hasta el final
+        
+        return time_start, time_20min, time_40min
+
     def create_temperature_plot(self, output_dir: str = "./Plots/") -> None:
         """
         Crea y guarda el gráfico de temperaturas de los sensores vs tiempo.
         """
         os.makedirs(output_dir, exist_ok=True)
 
-        # Calcular tiempo inicial y el intervalo en segundos
-        time_start = self.temperature_data.index.min()
-        time_max = self.temperature_data.index.max()
-        time_20min = time_start + pd.Timedelta(minutes=20)  # 20 minutos usando Timedelta
-        time_40min = time_start + pd.Timedelta(minutes=40)  # 40 minutos usando Timedelta
-        #time_40min = time_max
+        # Calcular ventana de tiempo usando el método helper
+        time_start, time_20min, time_40min = self._calculate_time_window()
         
          # Información adicional de los sensores y del run
         first_sensor = self.run_info.get("First_Sensor_ID", "Desconocido")
@@ -313,7 +374,12 @@ class Run:
 
         plt.figure(figsize=(10, 5))  # Ajustar el tamaño de la figura a más pequeño y cuadrado
 
-        for sensor in self.sensor_mapping.values():
+        # Filtrar sensores según show_references
+        sensors_to_plot = list(self.sensor_mapping.values())
+        if not self.show_references and len(sensors_to_plot) > 12:
+            sensors_to_plot = sensors_to_plot[:12]  # Solo los primeros 12 (corona)
+
+        for sensor in sensors_to_plot:
             if sensor in self.temperature_data.columns:
                 plt.plot(self.temperature_data.index, self.temperature_data[sensor], label=f"Sensor {sensor}")
 
@@ -339,17 +405,14 @@ class Run:
 
     def create_offset_plot(self, output_dir: str = "./Plots/") -> None:
         """
-        Crea y guarda el gráfico de offsets centrados entre sensores, limitado al intervalo de 20 a 40 minutos.
+        Crea y guarda el gráfico de offsets centrados entre sensores, limitado al intervalo configurado.
         """
         os.makedirs(output_dir, exist_ok=True)
 
-        # Calcular tiempo inicial y el intervalo en segundos
-        time_start = self.temperature_data.index.min()
-        time_max = self.temperature_data.index.max()
-        time_20min = time_start + pd.Timedelta(minutes=20)  # 20 minutos usando Timedelta
-        time_40min = time_start + pd.Timedelta(minutes=40)  # 40 minutos usando Timedelta
+        # Calcular ventana de tiempo usando el método helper
+        time_start, time_20min, time_40min = self._calculate_time_window()
 
-        # Filtrar datos para el intervalo de 20 a 40 minutos
+        # Filtrar datos para el intervalo configurado
         filtered_data = self.temperature_data.loc[time_20min:time_40min]
         
          # Información adicional de los sensores y del run
@@ -361,14 +424,24 @@ class Run:
         date = self.run_info.get("Date", "Desconocido")
         n_run = self.run_info.get("N_Run", "Desconocido")
 
-        # Crear subplots
-        fig, axes = plt.subplots(7, 2, figsize=(14, 19))
-        axes = axes.flatten()
+        # Filtrar sensores según show_references
         sensor_ids = list(self.sensor_mapping.values())
+        if not self.show_references and len(sensor_ids) > 12:
+            sensor_ids = sensor_ids[:12]  # Solo los primeros 12 (corona)
+        
+        # Crear subplots ajustados al número de sensores
+        n_sensors = len(sensor_ids)
+        n_rows = (n_sensors + 1) // 2  # Redondear hacia arriba
+        fig, axes = plt.subplots(n_rows, 2, figsize=(14, n_rows * 2.7))
+        axes = axes.flatten()
         
         # Título general de la figura
+        # Calcular minutos para el título
+        tmin_label = int((time_20min - time_start).total_seconds() / 60)
+        tmax_label = int((time_40min - time_start).total_seconds() / 60)
+        
         fig.suptitle(
-            f"Centered Temperature Offsets (20-40 min)\n"
+            f"Centered Temperature Offsets ({tmin_label}-{tmax_label} min)\n"
             f"Run Number: {n_run} | Date: {date} | CalibSet: {calib_set_number}\n"
             f"Ref. Sensors: {ref_sensor_1}, {ref_sensor_2}",
             fontsize=16, fontweight="bold", y=1.02
@@ -423,11 +496,8 @@ class Run:
         """
         os.makedirs(output_dir, exist_ok=True)
 
-        # Calcular tiempo inicial y el intervalo en segundos
-        time_start = self.temperature_data.index.min()
-        time_max = self.temperature_data.index.max()
-        time_20min = time_start + pd.Timedelta(minutes=20)  # 20 minutos usando Timedelta
-        time_40min = time_start + pd.Timedelta(minutes=40) # 40 minutos usando Timedelta
+        # Calcular ventana de tiempo usando el método helper
+        time_start, time_20min, time_40min = self._calculate_time_window()
         
          # Información adicional de los sensores y del run
         first_sensor = self.run_info.get("First_Sensor_ID", "Desconocido")
@@ -438,10 +508,16 @@ class Run:
         date = self.run_info.get("Date", "Desconocido")
         n_run = self.run_info.get("N_Run", "Desconocido")
 
-        # Crear subplots
-        fig, axes = plt.subplots(7, 2, figsize=(14, 19))
-        axes = axes.flatten()
+        # Filtrar sensores según show_references
         sensor_ids = list(self.sensor_mapping.values())
+        if not self.show_references and len(sensor_ids) > 12:
+            sensor_ids = sensor_ids[:12]  # Solo los primeros 12 (corona)
+        
+        # Crear subplots ajustados al número de sensores
+        n_sensors = len(sensor_ids)
+        n_rows = (n_sensors + 1) // 2  # Redondear hacia arriba
+        fig, axes = plt.subplots(n_rows, 2, figsize=(14, n_rows * 2.7))
+        axes = axes.flatten()
         
         fig.suptitle(
         f"Raw Temperature Offsets\n"
@@ -494,36 +570,51 @@ class Run:
         self.create_raw_offset_plot(output_dir=output_dir)
         print(f"Plots saved in {output_dir}")
 
-    def offsets(self) -> pd.DataFrame:
+    def offsets(self, tini: int = 20, tend: int = 40) -> pd.DataFrame:
         """
-        Calcula los offsets como la media de las diferencias entre pares de sensores.
+        Calcula los offsets como la media de las diferencias entre pares de sensores
+        en una ventana temporal específica.
+        
+        Args:
+            tini: Tiempo inicial en minutos desde el inicio del run (default: 20)
+            tend: Tiempo final en minutos desde el inicio del run (default: 40)
+        
         Retorna un DataFrame organizado como una matriz de sensores (filas y columnas).
         """
         try:
-            # Obtener los sensores activos (excluyendo los defectuosos). en principio todos los sensores estarán activos.
-            active_sensors = [sensor for sensor in self.sensor_mapping.values() if sensor in self.temperature_data.columns]
-            #active_sensors = list(self.sensor_mapping.values())
+            # Calcular ventana temporal
+            time_start = self.temperature_data.index.min()
+            time_20min = time_start + pd.Timedelta(minutes=tini)
+            time_40min = time_start + pd.Timedelta(minutes=tend)
+            
+            # Filtrar datos en la ventana temporal
+            filtered_data = self.temperature_data.loc[time_20min:time_40min]
+            
+            if filtered_data.empty:
+                print(f"⚠️  WARNING: No data in time window {tini}-{tend} minutes")
+                return pd.DataFrame()
+            
+            # Obtener los sensores activos (excluyendo los defectuosos)
+            active_sensors = [sensor for sensor in self.sensor_mapping.values() if sensor in filtered_data.columns]
 
             offset_matrix = pd.DataFrame(index=active_sensors, columns=active_sensors, dtype=float)
 
-        # Calcular los offsets solo entre sensores activos
-
+            # Calcular los offsets solo entre sensores activos
             for i, sensor1 in enumerate(active_sensors):
                 for j, sensor2 in enumerate(active_sensors):
                     if i == j:
                         offset_matrix.loc[sensor1, sensor2] = 0  # Diagonal con ceros
                     elif i < j:
                         # Verificar si toda la columna de cualquiera de los dos sensores es NaN
-                        if self.temperature_data[sensor1].isna().all() or self.temperature_data[sensor2].isna().all():
-                            offset_matrix.loc[sensor1, sensor2] = float('nan')  # Asignar NaN si uno de los sensores tiene todos los valores NaN
-                            offset_matrix.loc[sensor2, sensor1] = float('nan')  # Relación simétrica inversa
+                        if filtered_data[sensor1].isna().all() or filtered_data[sensor2].isna().all():
+                            offset_matrix.loc[sensor1, sensor2] = float('nan')
+                            offset_matrix.loc[sensor2, sensor1] = float('nan')
                         else:
-                            mean_offset = (self.temperature_data[sensor1] - self.temperature_data[sensor2]).mean()
+                            mean_offset = (filtered_data[sensor1] - filtered_data[sensor2]).mean()
                             offset_matrix.loc[sensor1, sensor2] = mean_offset
                             offset_matrix.loc[sensor2, sensor1] = -mean_offset  # Relación simétrica inversa
 
-            print("Offsets medios calculados exitosamente para el run.")
-            #print(offset_matrix)
+            print(f"Offsets medios calculados exitosamente para ventana {tini}-{tend} min.")
             self.offsets_data = offset_matrix
             return offset_matrix
 
@@ -532,18 +623,36 @@ class Run:
             return pd.DataFrame()
 
 
-    def stat_err_offsets(self) -> pd.DataFrame:
+    def stat_err_offsets(self, tini: int = -20, tend: int = 0) -> pd.DataFrame:
         """
-        Calcula el error RMS respecto a la media para cada pareja de sensores.
+        Calcula el error RMS respecto a la media para cada pareja de sensores
+        en una ventana temporal específica (relativa al final del run).
+        
+        Args:
+            tini: Tiempo inicial en minutos desde el FINAL del run (default: -20, últimos 20 minutos)
+            tend: Tiempo final en minutos desde el FINAL del run (default: 0, hasta el final)
+        
         Retorna un DataFrame organizado como una matriz de sensores (filas y columnas).
         """
         try:
             if not hasattr(self, 'offsets_data'):
                 raise ValueError("Debe calcular los offsets antes de calcular los errores RMS.")
 
-            # Filtrar solo los sensores activos (aquellos que no han sido eliminados). no vamos a eliminar ninguno en principio.
-            active_sensors = [sensor for sensor in self.sensor_mapping.values() if sensor in self.temperature_data.columns]
-            #active_sensors = list(self.sensor_mapping.values())
+            # Calcular ventana temporal relativa al final
+            time_end = self.temperature_data.index.max()
+            time_start_window = time_end + pd.Timedelta(minutes=tini)  # tini es negativo, ej: -20
+            time_end_window = time_end + pd.Timedelta(minutes=tend)    # tend es 0
+            
+            # Filtrar datos en la ventana temporal
+            filtered_data = self.temperature_data.loc[time_start_window:time_end_window]
+            
+            if filtered_data.empty:
+                print(f"⚠️  WARNING: No data in RMS time window {tini}-{tend} minutes from end")
+                return pd.DataFrame()
+
+            # Filtrar solo los sensores activos
+            active_sensors = [sensor for sensor in self.sensor_mapping.values() if sensor in filtered_data.columns]
+            
             if not active_sensors:
                 raise ValueError("No hay sensores activos para calcular los errores RMS.")
 
@@ -556,11 +665,11 @@ class Run:
                         rms_matrix.loc[sensor1, sensor2] = 0  # Diagonal con ceros
                     elif i < j:
                         mean_offset = self.offsets_data.loc[sensor1, sensor2]  # Obtener el offset promedio
-                        rms_error = ((self.temperature_data[sensor1] - self.temperature_data[sensor2] - mean_offset) ** 2).mean() ** 0.5
+                        rms_error = ((filtered_data[sensor1] - filtered_data[sensor2] - mean_offset) ** 2).mean() ** 0.5
                         rms_matrix.loc[sensor1, sensor2] = rms_error
                         rms_matrix.loc[sensor2, sensor1] = rms_error  # Simetría
 
-            print("Errores RMS calculados exitosamente para el run.")
+            print(f"Errores RMS calculados exitosamente para ventana {tini}-{tend} min desde final.")
             self.rms_offsets = rms_matrix
             return rms_matrix
 
