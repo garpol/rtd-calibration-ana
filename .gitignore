@@ -38,3 +38,24 @@ push_to_github.sh
 # Python cache
 __pycache__/
 *.pyc
+# Local data and outputs (keep out of repo)
+RTD_Calibration_VGP/data/temperature_files/Resistences/
+RTD_Calibration_VGP/data/temperature_files/CalSetN_1/
+RTD_Calibration_VGP/data/temperature_files/Frame_Sensors/
+
+# Notebook plots and outputs
+RTD_Calibration_VGP/notebooks/Plots/
+RTD_Calibration_VGP/notebooks/plot_global_means/
+RTD_Calibration_VGP/notebooks/plot_global_sigmas/
+RTD_Calibration_VGP/notebooks/calibration_network_improved.png
+calibration_constants_and_errors.xlsx
+TREE_NOTEBOOK_GUIDE.md
+
+# Local notebooks / experiments
+RTD_Calibration_VGP/notebooks/RUN_RESISTENCES.ipynb
+RTD_Calibration_VGP/notebooks/SET_STS_BUENO.ipynb
+
+# Local virtualenvs and caches
+.venv312/
+__pycache__/
+*.pyc
