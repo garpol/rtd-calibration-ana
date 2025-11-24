@@ -45,8 +45,9 @@
 # ANTES (incorrecto - busca sensor automáticamente):
 SENSOR_REFERENCIA = 48484  # ← Encontraba Set 4 (R1) primero ❌
 
-# DESPUÉS (correcto - especifica el set directamente):
-SET_REFERENCIA = 57  # ← Set de referencia R3 explícito ✅
+# DESPUÉS (correcto - auto-detecta set con runs):
+SET_REFERENCIA = 49 if 57 not in sets_dict else 57  # ← Auto-detecta ✅
+# Usa Set 57 (R3) si tiene runs, sino Set 49 (R2)
 
 # Llamada a la función:
 offset, error, path = net.compute_offset_to_top_reference(
@@ -54,6 +55,11 @@ offset, error, path = net.compute_offset_to_top_reference(
     ref_set=SET_REFERENCIA  # ← Parámetro correcto
 )
 ```
+
+**Ventaja de Auto-detección**:
+- ✅ Funciona con `TEST_SETS = [3, 4, 49, 57]` (usa Set 49)
+- ✅ Funciona con dataset completo (usa Set 57)
+- ✅ No requiere cambios manuales entre datasets
 
 #### 2. Validación de Ronda
 ```python
