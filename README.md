@@ -6,6 +6,23 @@ This repository contains code and notebooks to analyze RTD (Resistance Temperatu
 calibration runs. The main processing modules are under `RTD_Calibration_VGP/src/` and the
 logfile and temperature data live in `RTD_Calibration_VGP/data/`.
 
+## 🚀 Quick Start: Calibration Constants
+
+**Need calibration constants for precision resistances?** Run the standalone script:
+
+```bash
+cd RTD_Calibration_VGP/notebooks
+python3 calculate_calibration_constants.py
+```
+
+This calculates calibration constants for all 48 precision resistances using the tree method:
+
+- Reference: PDHD-HP-13 (offset = 0.000 mK)
+- Method: Weighted mean of multiple paths via raised sensors
+- Outputs: `calibration_constants_resistences.csv` and `.txt`
+
+For detailed analysis and visualization, see the `TREE_RESISTENCES.ipynb` notebook.
+
 ## Quick start
 
 1. Create and activate a Python virtual environment and install dependencies:
