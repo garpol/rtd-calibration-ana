@@ -482,6 +482,7 @@ class SetSTS:
     def plot_global_sigmas(self, selected_sets: list = None, save_dir: str = "plots_sts") -> None:
         """
         Grafica las sigmas globales (repetibilidad) para cada set.
+        Excluye sensores de referencia (IDs > 1000).
         
         Args:
             selected_sets: Lista de CalibSetNumber a graficar
@@ -495,24 +496,42 @@ class SetSTS:
         
         sets_to_plot = selected_sets if selected_sets else list(self.global_stats.keys())
         
-        fig, ax = plt.subplots(figsize=(12, 6))
+        fig, ax = plt.subplots(figsize=(18, 6))
         
         for calib_set in sets_to_plot:
             if calib_set not in self.global_stats:
                 continue
             
             sigmas = self.global_stats[calib_set]['sigmas']
-            sensors = list(sigmas.keys())
-            values = list(sigmas.values())
             
-            ax.plot(sensors, values, marker='s', label=f'{calib_set}', linewidth=2)
+            # Filtrar sensores de referencia (> 156)
+            filtered_sigmas = {}
+            for k, v in sigmas.items():
+                try:
+                    sensor_num = int(float(str(k)))
+                    if 1 <= sensor_num <= 156:
+                        filtered_sigmas[k] = v
+                except (ValueError, TypeError):
+                    # Si no se puede convertir a número, lo incluimos por seguridad
+                    pass
+            
+            if not filtered_sigmas:
+                print(f"⚠️  No sensors found for {calib_set} after filtering")
+                continue
+                
+            sensors = list(filtered_sigmas.keys())
+            values = list(filtered_sigmas.values())
+            
+            ax.scatter(sensors, values, marker='s', s=100, label=f'{calib_set}', 
+                      alpha=0.7, edgecolors='black', linewidth=1)
         
         ax.set_xlabel('Sensor ID', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Sigma (mK)', fontsize=12, fontweight='bold')
-        ax.set_title('Global Repeatability (Sigma) by Set', fontsize=14, fontweight='bold')
-        ax.legend(fontsize=10)
+        ax.set_ylabel('Repeatability σ (mK)', fontsize=12, fontweight='bold')
+        ax.set_title('Frame RTD Sensors (Standard) - Calibration Repeatability Analysis\nOffset Standard Deviation by Calibration Set', 
+                     fontsize=13, fontweight='bold', pad=15)
+        ax.legend(fontsize=9, loc='best', framealpha=0.9)
         ax.grid(True, alpha=0.3)
-        plt.xticks(rotation=45, ha='right')
+        plt.xticks(rotation=45, ha='right', fontsize=6)
         
         plot_path = os.path.join(save_dir, "global_sigmas_comparison.png")
         plt.tight_layout()

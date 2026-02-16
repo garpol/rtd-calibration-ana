@@ -1,0 +1,214 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# FRAME SENSORS CALIBRATION TREE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Este archivo define la estructura jerárquica del árbol de calibración para
+# los FRAME_SET (sensores RTD estándar de frame).
+#
+# 📌 ESTADO: PENDIENTE DE COMPLETAR
+# 
+# ⚠️ NOTA IMPORTANTE:
+#    Este archivo está preparado como template para cuando se cree el set de
+#    escalado (FRAME_SET_RAISED) que contendrá sensores "raised" de cada uno
+#    de los FRAME_SET4-13.
+#
+#    Los sensores 1-12 (distribuidos en FRAME_SET1-3 con solo 1 run cada uno)
+#    NO tienen suficientes runs para calcular repetibilidad, pero SÍ pueden
+#    calibrarse usando el método tree una vez se defina el set de referencia.
+#
+# ═══════════════════════════════════════════════════════════════════════════
+
+tree_metadata:
+  project: RTD_Calibration_Frame_Sensors
+  version: "1.0"
+  date_created: "2026-02-16"
+  author: "VGP Lab"
+  description: "Frame RTD sensors (standard) calibration tree structure"
+  notes: |
+    - FRAME_SET1-3: Solo 1 run cada uno, sensores 1-12 (sin repetibilidad)
+    - FRAME_SET4-13: Múltiples runs, análisis estadístico completo
+    - Pendiente: Crear FRAME_SET_RAISED con sensores puente de cada set
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REGLAS DE VALIDACIÓN
+# ═══════════════════════════════════════════════════════════════════════════
+
+validation_rules:
+  min_sensors_per_set: 1          # Mínimo de sensores por set
+  max_sensors_per_parent: 20      # Máximo de sensores por parent
+  require_raised_sensors: true     # Los sets intermedios deben tener raised
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DEFINICIÓN DE SETS
+# ═══════════════════════════════════════════════════════════════════════════
+
+sets:
+  # ───────────────────────────────────────────────────────────────────────
+  # SETS ESPECIALES (1 RUN CADA UNO - SIN REPETIBILIDAD)
+  # ───────────────────────────────────────────────────────────────────────
+  # Estos sets tienen solo 1 run por lo que NO se puede calcular sigma.
+  # Sin embargo, SÍ se pueden calcular offsets medios que serán usados
+  # para propagar calibración vía el método tree.
+  
+  FRAME_SET1:
+    round: 0  # Nivel más bajo (sin repetibilidad)
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores compartidos con otros sets
+    notes: "1 run only - No repeatability - Sensors 1-4 approx"
+    
+  FRAME_SET2:
+    round: 0
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores compartidos con otros sets
+    notes: "1 run only - No repeatability - Sensors 5-8 approx"
+    
+  FRAME_SET3:
+    round: 0
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores compartidos con otros sets
+    notes: "1 run only - No repeatability - Sensors 9-12 approx"
+
+  # ───────────────────────────────────────────────────────────────────────
+  # SETS PRINCIPALES (MÚLTIPLES RUNS - CON REPETIBILIDAD)
+  # ───────────────────────────────────────────────────────────────────────
+  # Estos sets tienen suficientes runs para análisis estadístico completo.
+  # Los sensores "raised" son los que aparecen en múltiples sets y sirven
+  # de puente para propagar calibraciones.
+  
+  FRAME_SET4:
+    round: 1  # Primera ronda con estadística válida
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores que aparecen en FRAME_SET5
+    notes: "Multiple runs - Valid repeatability analysis"
+    
+  FRAME_SET5:
+    round: 1
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores compartidos con FRAME_SET4 y FRAME_SET6
+    parents: [FRAME_SET4]  # Conectado vía sensores raised
+    
+  FRAME_SET6:
+    round: 1
+    reference_channel: 2
+    raised: []  # TODO: Identificar sensores compartidos
+    parents: [FRAME_SET5]
+    
+  FRAME_SET7:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET6]
+    
+  FRAME_SET8:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET7]
+    
+  FRAME_SET9:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET8]
+    
+  FRAME_SET10:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET9]
+    
+  FRAME_SET11:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET10]
+    
+  FRAME_SET12:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET11]
+    
+  FRAME_SET13:
+    round: 1
+    reference_channel: 2
+    raised: []
+    parents: [FRAME_SET12]
+
+  # ───────────────────────────────────────────────────────────────────────
+  # SET DE REFERENCIA (NIVEL SUPERIOR - PENDIENTE DE CREAR)
+  # ───────────────────────────────────────────────────────────────────────
+  # Este set contendrá sensores "raised" seleccionados de cada FRAME_SET4-13
+  # y servirá como referencia absoluta para propagar calibraciones a todos
+  # los demás sensores, incluidos los de FRAME_SET1-3.
+  
+  # FRAME_SET_RAISED:  # ⚠️ DESCOMENTAR CUANDO SE CREE ESTE SET
+  #   round: 2  # Nivel superior de referencia
+  #   reference_channel: 2
+  #   raised: []  # Este set no tiene "raised" porque es el top
+  #   parents: [FRAME_SET4, FRAME_SET5, FRAME_SET6, FRAME_SET7, FRAME_SET8,
+  #             FRAME_SET9, FRAME_SET10, FRAME_SET11, FRAME_SET12, FRAME_SET13]
+  #   total_sensors: 10  # Ejemplo: 1 sensor raised de cada FRAME_SET4-13
+  #   notes: |
+  #     Set combinado con sensores raised seleccionados de cada FRAME_SET.
+  #     Servirá como referencia absoluta para calibración tree.
+  #     Permitirá propagar offsets a sensores 1-12 de FRAME_SET1-3.
+
+# ═══════════════════════════════════════════════════════════════════════════
+# INSTRUCCIONES DE USO
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 🔧 PASOS PARA COMPLETAR ESTE ARCHIVO:
+#
+# 1. Identificar sensores "raised" (aparecen en múltiples sets):
+#
+#    from RTD_Calibration_VGP.src.setSTS import SetSTS
+#    # ... procesar todos los FRAME_SET
+#    # Analizar qué sensores aparecen en múltiples sets
+#
+# 2. Actualizar el campo "raised" de cada FRAME_SET4-13 con los IDs
+#    de sensores que se repiten.
+#
+# 3. Crear físicamente el FRAME_SET_RAISED en el LogFile:
+#    - Añadir líneas en LogFile.csv con CalibSetNumber = FRAME_SET_RAISED
+#    - Seleccionar ~1-2 sensores raised de cada FRAME_SET4-13
+#    - Hacer runs de calibración de este nuevo set
+#
+# 4. Descomentar la sección FRAME_SET_RAISED en este archivo.
+#
+# 5. Usar CalibrationNetwork para calcular offsets:
+#
+#    from RTD_Calibration_VGP.src.calibration_network import CalibrationNetwork
+#    
+#    network = CalibrationNetwork(
+#        sets_dict=all_sets_dict,  # Incluir FRAME_SET1-13 + RAISED
+#        config_path='config/frame_sensors_tree.yaml'
+#    )
+#    
+#    # Calcular offset de cualquier sensor (incluso 1-12)
+#    offset, error, details = network.compute_offset_to_top_reference(
+#        sensor_id=3,  # Sensor de FRAME_SET1
+#        ref_set='FRAME_SET_RAISED'
+#    )
+#
+# 📊 ANÁLISIS DE SENSORES RAISED (NOTEBOOK RECOMENDADO):
+#
+# Crear notebook para identificar sensores compartidos entre sets:
+#
+#    # Ver qué sensores aparecen en múltiples FRAME_SET
+#    sensor_appearances = {}
+#    for set_name, runs in set_instance.runs_by_set.items():
+#        for run_name, run_obj in runs.items():
+#            if run_obj.sensor_mapping:
+#                for sensor_id in run_obj.sensor_mapping.values():
+#                    if sensor_id not in sensor_appearances:
+#                        sensor_appearances[sensor_id] = []
+#                    sensor_appearances[sensor_id].append(set_name)
+#    
+#    # Filtrar sensores que aparecen en 2+ sets
+#    raised_candidates = {
+#        sensor: sets for sensor, sets in sensor_appearances.items()
+#        if len(set(sets)) >= 2
+#    }
+#
+# ═══════════════════════════════════════════════════════════════════════════
