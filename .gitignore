@@ -51,6 +51,16 @@ RTD_Calibration_VGP/notebooks/calibration_network_improved.png
 calibration_constants_and_errors.xlsx
 TREE_NOTEBOOK_GUIDE.md
 
+# Generated calibration outputs (CSV, Excel, TXT)
+RTD_Calibration_VGP/notebooks/*.csv
+RTD_Calibration_VGP/notebooks/*.xlsx
+RTD_Calibration_VGP/notebooks/*.txt
+RTD_Calibration_VGP/notebooks/offset_repeatability_*/
+RTD_Calibration_VGP/notebooks/*copia.ipynb
+
+# Temporary organization docs
+WORKSPACE_ORGANIZATION.md
+
 # Local virtualenvs and caches
 .venv312/
 __pycache__/
