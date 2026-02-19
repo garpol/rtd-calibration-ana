@@ -1602,18 +1602,22 @@ class Set:
 
         def plot_hist_rounds(include_descartados=False, filename_prefix="global_sigma_histogram_rounds"):
             # Build rounds from self.set_rounds if available
+            # Only include sets that are in self.global_stats (i.e., were processed)
+            available_sets = set(self.global_stats.keys())
+            
             rounds_map = {}
             if hasattr(self, "set_rounds") and self.set_rounds:
-                # invert mapping: round -> list of sets
+                # invert mapping: round -> list of sets, filtered by available sets
                 for s, r in self.set_rounds.items():
-                    rounds_map.setdefault(int(r), []).append(s)
+                    if s in available_sets:
+                        rounds_map.setdefault(int(r), []).append(s)
             else:
                 # fallback to the originally coded logic
                 rounds_map = {
-                    1: [s for s in calib_sets if 3 <= int(s) <= 48] + [s for s in calib_sets if int(s) in [59, 60, 61]],
-                    2: [s for s in calib_sets if 49 <= int(s) <= 55],
-                    3: [s for s in calib_sets if int(s) in [57, 62]],
-                    4: [s for s in calib_sets if int(s) == 63],
+                    1: [s for s in calib_sets if s in available_sets and (3 <= int(s) <= 48 or int(s) in [59, 60, 61])],
+                    2: [s for s in calib_sets if s in available_sets and 49 <= int(s) <= 55],
+                    3: [s for s in calib_sets if s in available_sets and int(s) in [57, 62]],
+                    4: [s for s in calib_sets if s in available_sets and int(s) == 63],
                 }
 
             # Build human-readable labels and filter empties
@@ -1660,7 +1664,9 @@ class Set:
             # Use numpy functions that are robust to NaN (though sigmas lists should not contain NaN)
             mu_total = float(np.nanmean(combined_sigmas)) if combined_sigmas else 0
             sigma_total = float(np.nanstd(combined_sigmas)) if combined_sigmas else 0
-            bins = np.histogram_bin_edges(combined_sigmas, bins=12)
+            # More bins for histograms with discarded sensors
+            n_bins = 20 if include_descartados else 12
+            bins = np.histogram_bin_edges(combined_sigmas, bins=n_bins)
             ymax = max([max(np.histogram(v, bins=bins, density=True)[0]) if (v and len(v) > 0) else 0 for v in rounds_sigmas.values()]) * 1.1
 
             # Subplots separados
