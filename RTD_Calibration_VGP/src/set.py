@@ -1664,22 +1664,33 @@ class Set:
             # Use numpy functions that are robust to NaN (though sigmas lists should not contain NaN)
             mu_total = float(np.nanmean(combined_sigmas)) if combined_sigmas else 0
             sigma_total = float(np.nanstd(combined_sigmas)) if combined_sigmas else 0
-            # More bins for histograms with discarded sensors
-            n_bins = 20 if include_descartados else 12
+            # Calculate bins based on data range: 1 bin per mK for both versions
+            data_range = max(combined_sigmas) - min(combined_sigmas)
+            if include_descartados:
+                n_bins = max(int(np.ceil(data_range)), 20)  # At least 20 bins
+            else:
+                n_bins = max(int(np.ceil(data_range)), 12)  # At least 12 bins
             bins = np.histogram_bin_edges(combined_sigmas, bins=n_bins)
             ymax = max([max(np.histogram(v, bins=bins, density=True)[0]) if (v and len(v) > 0) else 0 for v in rounds_sigmas.values()]) * 1.1
 
-            # Subplots separados
-            n_rounds = len(rounds_sigmas)
-            ncols = 2 if n_rounds > 1 else 1
-            nrows = math.ceil(n_rounds / ncols)
-            fig, axes = plt.subplots(nrows, ncols, figsize=(7*ncols, 6*nrows), sharey=True)
-            axes = np.array(axes).reshape(-1)
+            # Subplots separados - solo rounds con datos
+            rounds_with_data = {label: sigmas for label, sigmas in rounds_sigmas.items() if sigmas}
+            n_rounds = len(rounds_with_data)
+            if n_rounds == 0:
+                print("No hay datos para generar histogramas por ronda")
+                return
+            # Crear grid óptima: 1 fila si n<=3, 2 filas si n==4
+            if n_rounds <= 3:
+                nrows, ncols = 1, n_rounds
+            else:  # n_rounds == 4
+                nrows, ncols = 2, 2
+            fig, axes = plt.subplots(nrows, ncols, figsize=(7*ncols, 6*nrows), sharey=True, squeeze=False)
+            axes = axes.flatten()
 
             fig.suptitle("Errors Distribution by Round" + (" (Including discarded sensors)" if include_descartados else ""),
                          fontsize=16, fontweight='bold')
 
-            for ax, (label, sigmas) in zip(axes, rounds_sigmas.items()):
+            for ax, (label, sigmas) in zip(axes, rounds_with_data.items()):
                 # skip NaN in per-round stats (collect_sigmas already filtered)
                 valid_sigmas = [x for x in sigmas if pd.notnull(x)]
                 mu = float(np.nanmean(valid_sigmas)) if valid_sigmas else 0
@@ -1693,6 +1704,10 @@ class Set:
                         bbox=dict(facecolor='white', alpha=0.8))
                 ax.set_ylim(0, ymax)
                 ax.grid(True, linestyle="--", alpha=0.5)
+
+            # Ocultar subplots sobrantes (solo si hay subplot vacío)
+            for idx in range(n_rounds, len(axes)):
+                axes[idx].axis('off')
 
             plt.tight_layout()
             plt.savefig(os.path.join(save_dir, f"{filename_prefix}_subplots.png"))
@@ -1714,8 +1729,10 @@ class Set:
                           fontweight='bold')
             ax2.grid(True, linestyle="--", alpha=0.5)
             ax2.legend()
+            # Calcular ancho de bin
+            bin_width = bins[1] - bins[0] if len(bins) > 1 else 0
             ax2.text(0.95, 0.50,
-                     f"Total μ={mu_total:.2f} mK\nTotal σ={sigma_total:.2f} mK",
+                     f"Total μ={mu_total:.2f} mK\nTotal σ={sigma_total:.2f} mK\nbins={n_bins}\nbin width={bin_width:.2f} mK",
                      ha='right', va='top', transform=ax2.transAxes,
                      fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
             plt.savefig(os.path.join(save_dir, f"{filename_prefix}_overlap.png"))
