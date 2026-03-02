@@ -1452,113 +1452,128 @@ class Set:
         all_sigmas_descartados = []
 
         # =========================
-        # SCATTER PLOTS POR SETS
+        # SCATTER PLOTS POR SETS (dos versiones: con y sin descartados)
         # =========================
-        for i, subset in enumerate(chunks):
-            plt.figure(figsize=(12, 6))
-            subset_sigmas = []
+        def generate_scatter_plots(include_discarded=False, filename_suffix=""):
+            """Generate scatter plots with or without discarded sensors"""
+            for i, subset in enumerate(chunks):
+                plt.figure(figsize=(12, 6))
+                subset_sigmas = []
+                # Initialize plot_x_values (set numbers) and plot_sigmas ONCE per subset
+                plot_x_values = []  # Will store calib_set_number for each point
+                plot_sigmas = []
 
-            for calib_set_number in subset:
-                sensors_data = self.global_stats[calib_set_number]
-                descartados = set(self.discarded_sensors.get(float(calib_set_number), []))
+                for calib_set_number in subset:
+                    sensors_data = self.global_stats[calib_set_number]
+                    
+                    # Get discarded sensors for this set (if we want to exclude them)
+                    descartados_originales = set(self.discarded_sensors.get(float(calib_set_number), []))
+                    
+                    sensor_keys = [k for k in sensors_data.keys() if isinstance(k, (int, float, str)) and str(k).isdigit()]
+                    use_ids = all(int(k) >= 48000 for k in sensor_keys)
 
-                sensor_keys = [k for k in sensors_data.keys() if isinstance(k, (int, float, str)) and str(k).isdigit()]
-                use_ids = all(int(k) >= 48000 for k in sensor_keys)
-
-                example_run = next(iter(self.runs_by_set[calib_set_number].values()), None)
-                channel_to_id = {}
-
-                if example_run and example_run.sensor_mapping:
-                    channel_to_id = {int(k.replace("channel_", "")) - 1: int(v)
-                                     for k, v in example_run.sensor_mapping.items()}
-                    for ch in [12, 13]:
-                        sensor_id_ult = channel_to_id.get(ch)
-                        if sensor_id_ult is not None:
-                            descartados.add(sensor_id_ult)
-
-                for k in sensor_keys:
-                    try:
-                        key_int = int(k)
-                    except:
-                        continue
+                    example_run = next(iter(self.runs_by_set[calib_set_number].values()), None)
+                    channel_to_id = {}
 
                     if example_run and example_run.sensor_mapping:
-                        sensor_id_candidato = channel_to_id.get(key_int, key_int)
-                    else:
-                        sensor_id_candidato = key_int
-
-                    ultimos_canales_ids = [channel_to_id.get(12), channel_to_id.get(13)]
-                    if sensor_id_candidato in descartados and sensor_id_candidato not in ultimos_canales_ids:
-                        key_use = k if k in sensors_data else key_int
-                        sigma = sensors_data[key_use].get("sigma")
-                        # only collect finite numeric sigmas (skip None, NaN and inf)
-                        if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
-                            all_sigmas_descartados.append(sigma)
-
-                if use_ids:
-                    sensor_ids = [str(k) for k in sensor_keys if int(k) not in descartados]
-                else:
-                    sensor_ids = []
-                    for k in sensor_keys:
-                        ch_index = int(k)
-                        sensor_id = channel_to_id.get(ch_index)
-                        if sensor_id is None:
-                            sensor_ids.append(str(k))
-                        elif sensor_id not in descartados:
-                            sensor_ids.append(str(k))
-
-                # Build aligned lists of names and sigmas so x and y have same length
-                plot_names = []
-                plot_sigmas = []
-                for sid in sensor_ids:
-                    key = sid
-                    if sid in sensors_data:
-                        key = sid
-                    elif sid.isdigit() and int(sid) in sensors_data:
-                        key = int(sid)
-                    else:
-                        continue
-
-                    sigma = sensors_data[key].get("sigma")
-                    # only collect finite numeric sigmas; skip NaN/None and infinities
-                    if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
-                        # determine display name for this sensor
-                        if example_run and example_run.sensor_mapping:
+                        channel_to_id = {int(k.replace("channel_", "")) - 1: int(v)
+                                         for k, v in example_run.sensor_mapping.items()}
+                    
+                    # Build set of sensors to exclude: always exclude references (12, 13)
+                    # If include_discarded=False, also exclude discarded sensors
+                    sensores_a_excluir = set()
+                    
+                    # Always exclude reference channels (12, 13)
+                    for ch in [12, 13]:
+                        sensor_id_ref = channel_to_id.get(ch)
+                        if sensor_id_ref is not None:
+                            sensores_a_excluir.add(sensor_id_ref)
+                    
+                    # If we don't want discarded sensors, add them to exclusion list
+                    if not include_discarded:
+                        sensores_a_excluir.update(descartados_originales)
+                    
+                    # Collect sigmas for discarded sensors (for histogram purposes)
+                    if include_discarded:
+                        for k in sensor_keys:
                             try:
-                                ch_index = int(sid)
-                                sensor_name = str(example_run.sensor_mapping.get(f"channel_{ch_index+1}", f"Sensor {ch_index+1}"))
-                            except Exception:
-                                sensor_name = f"Sensor {sid}"
+                                key_int = int(k)
+                            except:
+                                continue
+
+                            if example_run and example_run.sensor_mapping:
+                                sensor_id_candidato = channel_to_id.get(key_int, key_int)
+                            else:
+                                sensor_id_candidato = key_int
+
+                            # Only collect discarded sensors (not references)
+                            if sensor_id_candidato in descartados_originales and sensor_id_candidato not in [channel_to_id.get(12), channel_to_id.get(13)]:
+                                key_use = k if k in sensors_data else key_int
+                                sigma = sensors_data[key_use].get("sigma")
+                                if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
+                                    all_sigmas_descartados.append(sigma)
+
+                    # Build list of sensor_ids to plot (excluding what needs to be excluded)
+                    if use_ids:
+                        sensor_ids = [str(k) for k in sensor_keys if int(k) not in sensores_a_excluir]
+                    else:
+                        sensor_ids = []
+                        for k in sensor_keys:
+                            ch_index = int(k)
+                            sensor_id = channel_to_id.get(ch_index)
+                            if sensor_id is None:
+                                sensor_ids.append(str(k))
+                            elif sensor_id not in sensores_a_excluir:
+                                sensor_ids.append(str(k))
+
+                    # For each sensor in this set, add a point (calib_set_number, sigma)
+                    for sid in sensor_ids:
+                        key = sid
+                        if sid in sensors_data:
+                            key = sid
+                        elif sid.isdigit() and int(sid) in sensors_data:
+                            key = int(sid)
                         else:
-                            sensor_name = f"Sensor {sid}"
+                            continue
 
-                        plot_names.append(sensor_name)
-                        plot_sigmas.append(sigma)
+                        sigma = sensors_data[key].get("sigma")
+                        # only collect finite numeric sigmas; skip NaN/None and infinities
+                        if sigma is not None and pd.notnull(sigma) and np.isfinite(sigma):
+                            # Add this sensor's sigma to the plot data
+                            # X = calib_set_number, Y = sigma
+                            plot_x_values.append(calib_set_number)
+                            plot_sigmas.append(sigma)
+                            subset_sigmas.append(sigma)
+                            
+                            if not include_discarded:
+                                all_sigmas.append(sigma)
 
-                subset_sigmas.extend(plot_sigmas)
-                all_sigmas.extend(plot_sigmas)
+                # Scatter all the accumulated points from all sets in this subset
+                # X = set number, Y = sigma value
+                if plot_x_values and plot_sigmas:
+                    plt.scatter(plot_x_values, plot_sigmas, marker='o', alpha=0.6)
 
-                # Scatter only the aligned pairs
-                if plot_names and plot_sigmas:
-                    plt.scatter(plot_names, plot_sigmas, marker='o')
+                # Use NaN-safe aggregations to avoid NaN propagation
+                overall_sigma_mean = float(np.nanmean(subset_sigmas)) if subset_sigmas else 0.0
+                overall_sigma_std = float(np.nanstd(subset_sigmas)) if subset_sigmas else 0.0
+                legend_title = f"μ: {overall_sigma_mean:.2f} mK\nσ: {overall_sigma_std:.2f} mK (n={len(subset_sigmas)})"
 
-            # Use NaN-safe aggregations to avoid NaN propagation
-            overall_sigma_mean = float(np.nanmean(subset_sigmas)) if subset_sigmas else 0.0
-            overall_sigma_std = float(np.nanstd(subset_sigmas)) if subset_sigmas else 0.0
-            legend_title = f"μ: {overall_sigma_mean:.2f} mK\nσ: {overall_sigma_std:.2f} mK"
+                plt.xlabel("CalibSetNumber", fontsize=14, fontweight='bold')
+                plt.ylabel("Calibration Constant Systematic Errors (mK)", fontsize=12, fontweight='bold')
+                plt.ylim(0, 6)
+                title_suffix = " (including discarded)" if include_discarded else ""
+                plt.title(f"Sets {subset[0]:.0f} to {subset[-1]:.0f}{title_suffix}", fontsize=18, fontweight='bold')
+                plt.xticks(rotation=0, fontsize=10)
+                plt.legend(title=legend_title, title_fontproperties={'weight': 'bold'}, loc='upper left')
+                plt.grid(True, linestyle="--", alpha=0.5)
 
-            plt.xlabel("Sensor ID", fontsize=14, fontweight='bold')
-            plt.ylabel("Calibration Constant Systematic Errors (mK)", fontsize=12, fontweight='bold')
-            plt.ylim(0, 6)
-            plt.title(f"Sets {subset[0]:.0f} to {subset[-1]:.0f}", fontsize=18, fontweight='bold')
-            plt.xticks(rotation=45, ha="right", fontsize=6)
-            plt.legend(title=legend_title, title_fontproperties={'weight': 'bold'}, loc='upper left')
-            plt.grid(True, linestyle="--", alpha=0.5)
+                plot_filename = os.path.join(save_dir, f"global_sigma_offsets{filename_suffix}_part_{i+1}.png")
+                plt.savefig(plot_filename)
+                plt.show()
 
-            plot_filename = os.path.join(save_dir, f"global_sigma_offsets_part_{i+1}.png")
-            plt.savefig(plot_filename)
-            plt.show()
-
+        # Generate both versions: without and with discarded sensors
+        generate_scatter_plots(include_discarded=False, filename_suffix="")
+        generate_scatter_plots(include_discarded=True, filename_suffix="_all_sensors")
         # =========================
         # HISTOGRAMS BY ROUNDS (dynamic up to 4 rounds)
         # =========================
@@ -1699,7 +1714,7 @@ class Set:
                 ax.set_title(label, fontweight='bold')
                 ax.set_xlabel("Calibration Constant Reproducibility (mK)", fontweight='bold')
                 ax.set_ylabel("Density", fontweight='bold')
-                ax.text(0.95, 0.95, f"μ = {mu:.2f} mK\nσ = {sigma:.2f} mK",
+                ax.text(0.95, 0.95, f"μ = {mu:.2f} mK\nσ = {sigma:.2f} mK\nn = {len(valid_sigmas)}",
                         ha='right', va='top', transform=ax.transAxes, fontsize=10,
                         bbox=dict(facecolor='white', alpha=0.8))
                 ax.set_ylim(0, ymax)
@@ -1721,7 +1736,7 @@ class Set:
                 mu = float(np.nanmean(valid_sigmas)) if valid_sigmas else 0
                 sigma = float(np.nanstd(valid_sigmas)) if valid_sigmas else 0
                 ax2.hist(valid_sigmas, bins=bins, alpha=0.5, color=c, density=True,
-                         label=f"{label}\nμ={mu:.2f} mK\nσ={sigma:.2f} mK")
+                         label=f"{label}\nμ={mu:.2f} mK, σ={sigma:.2f} mK, n={len(valid_sigmas)}")
             ax2.set_xlabel("Calibration Constant Reproducibility (mK)", fontweight='bold')
             ax2.set_ylabel("Density", fontweight='bold')
             ax2.set_ylim(0, ymax)
@@ -1732,7 +1747,7 @@ class Set:
             # Calcular ancho de bin
             bin_width = bins[1] - bins[0] if len(bins) > 1 else 0
             ax2.text(0.95, 0.50,
-                     f"Total μ={mu_total:.2f} mK\nTotal σ={sigma_total:.2f} mK\nbins={n_bins}\nbin width={bin_width:.2f} mK",
+                     f"Total μ={mu_total:.2f} mK\nTotal σ={sigma_total:.2f} mK\nn={len(combined_sigmas)}\nbins={n_bins}\nbin width={bin_width:.2f} mK",
                      ha='right', va='top', transform=ax2.transAxes,
                      fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
             plt.savefig(os.path.join(save_dir, f"{filename_prefix}_overlap.png"))
