@@ -65,3 +65,4 @@ WORKSPACE_ORGANIZATION.md
 .venv312/
 __pycache__/
 *.pyc
+.venv-fbg/

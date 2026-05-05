@@ -1,3 +1,24 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python.defaultInterpreterPath": "/afs/cern.ch/user/v/vgarciap/rtd-calibration-ana/FBG_Sensitivity_Analysis/.venv-fbg/bin/python",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": false,
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.python",
+        "editor.formatOnSave": false
+    },
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.extraPaths": [],
+    "python.analysis.include": ["**"],
+    "notebook.lineNumbers": "on",
+    "notebook.renderMarkdownCheckbox": true,
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/*.pyc": true
+    },
+    "[jupyter]": {
+        "python.analysis.typeCheckingMode": "off"
+    },
+    "python.linting.ignorePatterns": ["**/site-packages/**"],
+    "editor.formatOnSave": false
 }
