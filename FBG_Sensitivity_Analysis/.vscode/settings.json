@@ -20,5 +20,20 @@
         "python.analysis.typeCheckingMode": "off"
     },
     "python.linting.ignorePatterns": ["**/site-packages/**"],
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "python-envs.pythonProjects": [],
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "jupyter.kernels.preferred": "fbg-venv",
+    "jupyter.jupyterServerURI": "local",
+    "jupyter.kernelProvider": "jupyter",
+    "jupyter.interactiveWindow.creationScript": "",
+    "python.formatting.provider": "none",
+    "extensions.recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter",
+        "ms-toolsai.jupyter-keymap",
+        "ms-toolsai.jupyter-renderers"
+    ]
 }
