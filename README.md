@@ -6,7 +6,7 @@ This repository contains code and notebooks to analyze RTD (Resistance Temperatu
 calibration runs. The main processing modules are under `RTD_Calibration_VGP/src/` and the
 logfile and temperature data live in `RTD_Calibration_VGP/data/`.
 
-## 🚀 Quick Start: Calibration Constants
+##  Quick Start: Calibration Constants
 
 **Need calibration constants for precision resistances?** Run the standalone script:
 
@@ -176,19 +176,19 @@ This approach typically reduces the final uncertainty by combining information f
 
 **Example output:**
 ```
-📊 RESUMEN DE CAMINOS CALCULADOS
+ RESUMEN DE CAMINOS CALCULADOS
    Total de caminos válidos: 3/3
 
-🏆 MEJOR CAMINO (menor error):
+ MEJOR CAMINO (menor error):
    Camino #2: Sensor raised 48204
    Offset: 0.123456 ± 0.000234
 
-🎯 RESULTADO FINAL (MEDIA PONDERADA):
+ RESULTADO FINAL (MEDIA PONDERADA):
    Offset ponderado: 0.123450
    Error ponderado:  0.000198
    
-📈 COMPARACIÓN CON MEJOR CAMINO:
-   ✅ Media ponderada tiene MENOR error (0.000198 < 0.000234)
+ COMPARACIÓN CON MEJOR CAMINO:
+    Media ponderada tiene MENOR error (0.000198 < 0.000234)
 ```
 
 See `notebooks/TREE.ipynb` for a complete working example.
