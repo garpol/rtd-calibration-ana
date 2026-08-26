@@ -707,7 +707,7 @@ class Set:
                     run_stds.append(run_std)
                     run_labels.append(run_label)
 
-                    axes[idx].plot(time_relative, offset, label=run_label)
+                    axes[idx].plot(np.asarray(time_relative), np.asarray(offset), label=run_label)
 
                 run_means = np.array(run_means)
                 run_stds = np.array(run_stds)
@@ -1416,7 +1416,7 @@ class Set:
                 rotation = 60
 
             plt.xticks(rotation=rotation, ha="right", fontsize=6)
-            plt.legend(title=legend_title, title_fontproperties={'weight': 'bold'}, loc='upper right')
+            plt.legend(title=legend_title, loc='upper right')
             plt.grid(True, linestyle="--", alpha=0.5)
 
             plot_filename = os.path.join(save_dir, f"global_mean_offsets_part_{i+1}.png")
@@ -1564,7 +1564,7 @@ class Set:
                 title_suffix = " (including discarded)" if include_discarded else ""
                 plt.title(f"Sets {subset[0]:.0f} to {subset[-1]:.0f}{title_suffix}", fontsize=18, fontweight='bold')
                 plt.xticks(rotation=0, fontsize=10)
-                plt.legend(title=legend_title, title_fontproperties={'weight': 'bold'}, loc='upper left')
+                plt.legend(title=legend_title, loc='upper left')
                 plt.grid(True, linestyle="--", alpha=0.5)
 
                 plot_filename = os.path.join(save_dir, f"global_sigma_offsets{filename_suffix}_part_{i+1}.png")
