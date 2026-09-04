@@ -62,7 +62,7 @@ RTD_Calibration_VGP/notebooks/*copia.ipynb
 WORKSPACE_ORGANIZATION.md
 
 # Local virtualenvs and caches
-.venv312/
-__pycache__/
-*.pyc
 .venv-fbg/
+RTD_Calibration_VGP/outputs/
+outputs/
+

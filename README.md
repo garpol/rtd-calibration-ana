@@ -6,22 +6,33 @@ This repository contains code and notebooks to analyze RTD (Resistance Temperatu
 calibration runs. The main processing modules are under `RTD_Calibration_VGP/src/` and the
 logfile and temperature data live in `RTD_Calibration_VGP/data/`.
 
-##  Quick Start: Calibration Constants
+## 🚀 Quick Start: RTD Calibration Constants
 
-**Need calibration constants for precision resistances?** Run the standalone script:
+Calibrate any RTD set directly from the terminal without opening Jupyter:
 
 ```bash
-cd RTD_Calibration_VGP/notebooks
-python3 calculate_calibration_constants.py
+# Calibrate Set 12 (default: Channel 2 as reference)
+python3 scripts/calculate_set_constants.py --set 12
+
+# Calibrate Set 12 using official EOS Excel LogFile
+python3 scripts/calculate_set_constants.py --set 12 --eos
+
+# Specify a custom reference channel (e.g. Channel 13 / probe 49215)
+python3 scripts/calculate_set_constants.py --set 12 --ref-ch 13
 ```
 
-This calculates calibration constants for all 48 precision resistances using the tree method:
+Outputs:
+- Terminal summary table with offsets, repeatability $\sigma$, and per-run values.
+- CSV table saved to `RTD_Calibration_VGP/outputs/set_{SET}/set_{SET}_calibration_constants.csv`.
+- Repeatability multi-panel plot saved to `RTD_Calibration_VGP/outputs/set_{SET}/offset_repeatability_set_{SET}.png`.
 
-- Reference: PDHD-HP-13 (offset = 0.000 mK)
-- Method: Weighted mean of multiple paths via raised sensors
-- Outputs: `calibration_constants_resistences.csv` and `.txt`
+### Precision Resistances (STS) Constants
+For STS resistance calibration sets (`RESIST_SET1` to `5`):
+```bash
+python3 RTD_Calibration_VGP/notebooks/calculate_calibration_constants.py
+```
+Outputs: `calibration_constants_resistences.csv` and `.txt`.
 
-For detailed analysis and visualization, see the `TREE_RESISTENCES.ipynb` notebook.
 
 ## Quick start
 

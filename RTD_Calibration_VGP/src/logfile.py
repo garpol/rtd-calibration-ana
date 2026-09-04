@@ -36,10 +36,19 @@ class Logfile:
             else:
                 if not self.filepath or not os.path.exists(self.filepath):
                     raise FileNotFoundError(f"Logfile not found at '{self.filepath}'")
-                df = pd.read_csv(self.filepath)
+                
+                # Support both Excel (.xlsx, .xls) and CSV files
+                if self.filepath.lower().endswith(('.xlsx', '.xls')):
+                    xl = pd.ExcelFile(self.filepath)
+                    sheet_name = 'DUNE-HD_LogFile' if 'DUNE-HD_LogFile' in xl.sheet_names else 0
+                    df = pd.read_excel(xl, sheet_name=sheet_name)
+                    print(f"Excel file loaded successfully from '{self.filepath}' (sheet: '{sheet_name}').")
+                else:
+                    df = pd.read_csv(self.filepath)
+                    print(f"CSV file loaded successfully from '{self.filepath}'.")
 
             # Normalize column names and common columns
-            df = df.rename(columns=lambda c: c.strip())
+            df = df.rename(columns=lambda c: c.strip() if isinstance(c, str) else c)
             # Ensure expected columns exist; add placeholders if needed
             expected = ["Filename", "Selection", "CalibSetNumber", "Date", "N_Run"]
             for col in expected:
@@ -60,7 +69,6 @@ class Logfile:
             except Exception:
                 pass
 
-            print(f"CSV file loaded successfully from '{self.filepath or 'provided DataFrame'}'.")
             return df
         except Exception as e:
             raise RuntimeError(f"An error occurred while reading the log file: {e}")
