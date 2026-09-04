@@ -67,8 +67,8 @@ def parse_args():
     parser.add_argument(
         "--config", "-c",
         type=str,
-        default=str(repo_root / "RTD_Calibration_VGP/config.yml"),
-        help="Path to config.yml. Default: RTD_Calibration_VGP/config.yml"
+        default=str(repo_root / "RTD_Calibration_VGP/config/config.yml"),
+        help="Path to config.yml. Default: RTD_Calibration_VGP/config/config.yml"
     )
     parser.add_argument(
         "--ref-ch",
@@ -81,6 +81,11 @@ def parse_args():
         type=str,
         default=None,
         help="Sensor ID to use as reference sensor (overrides --ref-ch if provided)."
+    )
+    parser.add_argument(
+        "--fixed-ref",
+        action="store_true",
+        help="Force a single fixed reference channel (--ref-ch), even if the set has raised sensors."
     )
     parser.add_argument(
         "--save-dir", "-o",
@@ -162,7 +167,20 @@ def main():
             print(f"⚠️ Warning: Reference sensor ID '{args.ref_sensor}' not found in Set {set_str}. Falling back to Ch {ref_ch}.")
 
     ref_sensor_id = sensor_names.get(ref_ch, "Unknown")
-    print(f"\n🎯 Reference sensor: Channel {ref_ch} → ID '{ref_sensor_id}'")
+
+    # Check if set uses dynamic raised references or fixed reference
+    raised_ids = set_engine.sensors_raised_by_set.get(set_num, [])
+    has_dynamic_refs = len(raised_ids) >= 2 and not getattr(args, 'fixed_ref', False)
+
+    if args.fixed_ref and set_num in set_engine.sensors_raised_by_set:
+        # Override to force fixed reference
+        set_engine.sensors_raised_by_set[set_num] = []
+        has_dynamic_refs = False
+
+    if has_dynamic_refs:
+        print(f"\n🔄 Set {set_str} has raised sensors: {raised_ids}. Using dynamic circular references.")
+    else:
+        print(f"\n🎯 Reference sensor: Channel {ref_ch} → ID '{ref_sensor_id}' (Fixed reference)")
 
     # Compute offsets & RMS matrix
     print("\n⏳ Computing offsets and RMS matrices...")
@@ -193,27 +211,33 @@ def main():
         run_means = ch_stat.get("run_means", [])
         run_stds = ch_stat.get("run_stds", [])
 
-        if ch == ref_ch:
+        mean_val = ch_stat.get("mean", np.nan)
+        sigma_val = ch_stat.get("sigma", np.nan)
+
+        if np.isnan(mean_val) and run_means:
+            valid_means = [m for m in run_means if not np.isnan(m)]
+            if valid_means:
+                if all(abs(m) < 1e-9 for m in valid_means):
+                    mean_val = 0.0
+                    sigma_val = 0.0
+                else:
+                    mean_val = float(np.mean(valid_means))
+                    sigma_val = float(np.std(valid_means, ddof=1)) if len(valid_means) > 1 else 0.0
+
+        if not has_dynamic_refs and ch == ref_ch:
             mean_val = 0.0
             sigma_val = 0.0
             status = "REFERENCE"
+        elif np.isnan(sigma_val) or (np.isnan(mean_val) and not run_means):
+            status = "NO_DATA"
+        elif abs(mean_val) < 1e-9 and sigma_val < 1e-9:
+            status = "REFERENCE"
+        elif sigma_val < 2.0:
+            status = "OK (< 2 mK)"
+        elif sigma_val < 5.0:
+            status = "ACCEPTABLE"
         else:
-            mean_val = ch_stat.get("mean", np.nan)
-            sigma_val = ch_stat.get("sigma", np.nan)
-            if np.isnan(mean_val) and run_means:
-                valid_means = [m for m in run_means if not np.isnan(m)]
-                if valid_means:
-                    mean_val = float(np.mean(valid_means))
-                    sigma_val = float(np.std(valid_means, ddof=1)) if len(valid_means) > 1 else 0.0
-            
-            if np.isnan(sigma_val):
-                status = "NO_DATA"
-            elif sigma_val < 2.0:
-                status = "OK (< 2 mK)"
-            elif sigma_val < 5.0:
-                status = "ACCEPTABLE"
-            else:
-                status = "HIGH_SIGMA"
+            status = "HIGH_SIGMA"
 
         row = {
             "Channel": f"Ch {ch}",
@@ -233,7 +257,8 @@ def main():
 
     # Print clean table
     print("\n" + "=" * 95)
-    print(f"  CALIBRATION CONSTANTS & REPEATABILITY — SET {set_str} (Ref: Ch {ref_ch} / {ref_sensor_id})")
+    ref_desc = "Dynamic (Raised Sensors)" if has_dynamic_refs else f"Fixed (Ch {ref_ch} / {ref_sensor_id})"
+    print(f"  CALIBRATION CONSTANTS & REPEATABILITY — SET {set_str} [Ref: {ref_desc}]")
     print("=" * 95)
 
     headers = ["Channel", "Sensor ID", "Offset (mK)", "Sigma (mK)", "Status"]
