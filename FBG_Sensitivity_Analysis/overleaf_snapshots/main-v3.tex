@@ -1,0 +1,698 @@
+%% This is file `elsarticle-template-1-num.tex',
+%%
+%% Copyright 2009 Elsevier Ltd
+%%
+%% This file is part of the 'Elsarticle Bundle'.
+%% ---------------------------------------------
+%%
+%% It may be distributed under the conditions of the LaTeX Project Public
+%% License, either version 1.2 of this license or (at your option) any
+%% later version.  The latest version of this license is in
+%%    http://www.latex-project.org/lppl.txt
+%% and version 1.2 or later is part of all distributions of LaTeX
+%% version 1999/12/01 or later.
+%%
+%% Template article for Elsevier's document class `elsarticle'
+%% with numbered style bibliographic references
+%%
+%% $Id: elsarticle-template-1-num.tex 149 2009-10-08 05:01:15Z rishi $
+%% $URL: http://lenova.river-valley.com/svn/elsbst/trunk/elsarticle-template-1-num.tex $
+%%
+\documentclass[preprint,11pt]{elsarticle}
+
+%% Use the option review to obtain double line spacing
+%% \documentclass[preprint,review,12pt]{elsarticle}
+
+%% Use the options 1p,twocolumn; 3p; 3p,twocolumn; 5p; or 5p,twocolumn
+%% for a journal layout:
+%% \documentclass[final,1p,times]{elsarticle}
+%% \documentclass[final,1p,times,twocolumn]{elsarticle}
+%% \documentclass[final,3p,times]{elsarticle}
+%% \documentclass[final,3p,times,twocolumn]{elsarticle}
+%% \documentclass[final,5p,times]{elsarticle}
+%% \documentclass[final,5p,times,twocolumn]{elsarticle}
+
+%% The graphicx package provides the includegraphics command.
+\usepackage{graphicx}
+%% The amssymb package provides various useful mathematical symbols
+\usepackage{amssymb}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{url}
+%% The amsthm package provides extended theorem environments
+%% \usepackage{amsthm}
+
+%% The lineno packages adds line numbers. Start line numbering with
+%% \begin{linenumbers}, end it with \end{linenumbers}. Or switch it on
+%% for the whole article with \linenumbers after \end{frontmatter}.
+\usepackage{lineno}
+\usepackage{newtxtext,newtxmath,amsmath,fixme}
+
+%%%%%%
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=1cm,text centered, draw=black, fill=gray!20]
+\tikzstyle{process} = [rectangle, minimum width=2.5cm, minimum height=1cm, text centered, draw=black, fill=blue!10]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=yellow!20]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+\usepackage{float}
+%%%%%%%%%%%%%%%%%%%%
+
+
+
+%% natbib.sty is loaded by default. However, natbib options can be
+%% provided with \biboptions{...} command. Following options are
+%% valid:
+
+%%   round  -  round parentheses are used (default)
+%%   square -  square brackets are used   [option]
+%%   curly  -  curly braces are used      {option}
+%%   angle  -  angle brackets are used    <option>
+%%   semicolon  -  multiple citations separated by semi-colon
+%%   colon  - same as semicolon, an earlier confusion
+%%   comma  -  separated by comma
+%%   numbers-  selects numerical citations
+%%   super  -  numerical citations as superscripts
+%%   sort   -  sorts multiple citations according to order in ref. list
+%%   sort&compress   -  like sort, but also compresses numerical citations
+%%   compress - compresses without sorting
+%%
+%% \biboptions{comma,round}
+
+% \biboptions{}
+
+\journal{Nuclear Instruments and Methods A}
+
+\begin{document}
+
+\begin{frontmatter}
+
+%% Title, authors and addresses
+
+%\title{Millikelvin precise temperature monitoring system for the ProtoDUNE-SP LArTPC detector at CERN}
+
+\title{R\&D on milikelvin-precision temperature sensing with FBG fibers for cryogenic environments}
+
+%% use the tnoteref command within \title for footnotes;
+%% use the tnotetext command for the associated footnote;
+%% use the fnref command within \author or \address for footnotes;
+%% use the fntext command for the associated footnote;
+%% use the corref command within \author for corresponding author footnotes;
+%% use the cortext command for the associated footnote;
+%% use the ead command for the email address,
+%% and the form \ead[url] for the home page:
+%%
+%% \title{Title\tnoteref{label1}}
+%% \tnotetext[label1]{}
+%% \author{Name\corref{cor1}\fnref{label2}}
+%% \ead{email address}
+%% \ead[url]{home page}
+%% \fntext[label2]{}
+%% \cortext[cor1]{}
+%% \address{Address\fnref{label3}}
+%% \fntext[label3]{}
+
+
+%% use optional labels to link authors explicitly to addresses:
+%% \author[label1,label2]{<author name>}
+%% \address[label1]{<address>}
+%% \address[label2]{<address>}
+
+
+%\author[ific]{J. \'Alvarez, H. Amar, C. Ben\'itez, J. Cap\'o, A. Cervera, J. Mart\'in-Albo, L. Molina, M. Sorel, J. Soto,  M. Tuzi, J. Ure\~na, N. Yahlali  }
+
+% More authors to be added
+\author{ 
+V. García, J. Álvarez, S. Benítez, J. Capó, A. Cervera, J. Soto, S. Teruel, N. Yahlali}
+
+\affiliation{
+    organization={Instituto de Física Corpuscular (IFIC), CSIC--Universitat de València},
+    city={Valencia},
+    country={Spain}
+}
+
+
+% \address[ific]{Instituto de F\'isica Corpuscular, CSIC \& University of Valencia, Spain}
+
+
+
+\date{\today}
+
+\begin{abstract}
+
+Precise temperature monitoring, at the level of a few millikelvin, is essential for the operation of large-scale cryostats equipped with recirculation systems. In particular, the performance of Liquid Argon Time Projection Chambers (LArTPCs), such as those planned for the DUNE experiment, strongly depends on efficient argon purification and mixing, which can be characterized through a sufficiently dense grid of high-precision temperature sensors.
+In environments where the use of conventional electrical sensors, such as Resistance Temperature Detectors (RTDs), may be limited by the presence of high electric fields, Fiber Bragg Grating (FBG) sensors provide an attractive alternative. FBGs offer electrical insulation, immunity to electromagnetic interference, and the possibility of multiplexing multiple sensors along a single optical fiber, making them particularly suitable for large cryogenic systems.
+In this article, we present the principles and experimental validation of a temperature monitoring system based on an array of FBG sensors, with particular emphasis on the techniques required to achieve millikelvin-level temperature precision. The results demonstrate the potential of FBG arrays for high-precision temperature monitoring in large-scale cryogenic systems.
+
+    % Outline of the abstract
+%    \begin{itemize}
+%    \item Brief context on Fiber Bragg Gratings (FBGs) for temperature measurement.
+% \ Objective: Evaluate the thermal sensitivity and repeatability of differently coated fibers.
+%        \item Method: Cryogenic pressure-based setup using liquid nitrogen.
+%        \item Key findings to be added... \\
+%    \end{itemize}
+
+%    The Deep Underground Neutrino Experiment (DUNE) requires extreme thermal stability within its Liquid Argon (LAr) cryostats... Specifically, temperature gradients must be maintained below 20 mK to stabilize the electron drift velocity in the LArTPC. In this work, we present a thermal sensitivity repeatability study of Fiber Bragg Grating (FBG) sensors conducted in a cryogenic pressure-based nitrogen setup. Our results demonstrate the reliability of different coated FBG sensors...
+
+
+\end{abstract}
+
+\begin{keyword}
+Detectors \sep Liquid nitrogen \sep FBG \sep cryogenics \sep RTD \sep Temperature
+%% keywords here, in the form: keyword \sep keyword
+
+%% MSC codes here, in the form: \MSC code \sep code
+%% or \MSC[2008] code \sep code (2000 is the default)
+
+\end{keyword}
+
+\end{frontmatter}
+
+\tableofcontents
+
+
+\linenumbers
+
+% ==========================================
+\section{Introduction}
+% ==========================================
+\label{sec:intro}
+
+Fiber Bragg Gratings (FBGs) constitute an emerging technology that has been extensively studied and widely used for structural health monitoring in industrial and civil engineering applications at ambient temperatures. However, comparatively limited research has been performed on their use in cryogenic environments. 
+The development of FBG-based sensing systems for cryogenic applications is being pursued in the context of the Deep Underground Neutrino Experiment (DUNE), where precise temperature measurements in its large liquid-argon detectors are essential for understanding and optimizing the cryogenic recirculation system.
+
+DUNE employs Liquid Argon Time Projection Chamber (LArTPC) technology to produce a three-dimensional image of the trajectories of charged particles. Liquid-argon mixing is promoted by injecting relatively warm liquid argon through the bottom of the detector at well-defined locations, referred to as inlets, while a set of pumps provides continuous recirculation \cite{abi2020deepundergroundneutrinoexperiment, dunecollaboration2023dunefardetectorvertical}. Computational Fluid Dynamics (CFD) simulations have been used to optimize the number and location of the inlets and recirculation pumps, as well as the temperature of the incoming liquid argon relative to the bulk. These simulations predict a stationary vertical temperature gradient of approximately 20 mK. Such gradients have also been observed in the DUNE prototypes at CERN, which are approximately half the height of the final detectors. Measuring these gradients with a precision better than 5 mK is therefore crucial for validating the CFD models and understanding the performance of the liquid-argon recirculation system.
+%Natural convection then contributes to the establishment of a recirculation pattern that progressively distributes the purified argon throughout the detector volume, resulting in electron lifetimes exceeding 20 ms. 
+
+%Ionization electrons produced by particle interactions drift through the liquid argon towards the anode planes, where they are detected and read out. Efficient liquid-argon recirculation and purification are essential to reduce electronegative impurities to the parts-per-billion level, since these impurities absorb drifting electrons and consequently degrade the quality of the reconstructed images. 
+
+%An FBG consists of a periodic modulation of the refractive index of an optical fiber, which causes light at a specific wavelength—the Bragg wavelength—to be reflected. An interrogator sends broadband or wavelength-tunable light through the fiber and analyzes the reflected signal. The Bragg wavelength depends on both the temperature and the strain at the location of the FBG. Consequently, changes in the reflected wavelength provide information about the local temperature and strain. If the strain is sufficiently well controlled or independently characterized, the temperature can be inferred from the wavelength shift.
+
+%FBG technology is complementary to conventional Resistance Temperature Detectors (RTDs), and the choice between the two depends on the specific application. While RTDs require electrical cables for signal readout, which are generally robust and relatively easy to handle, optical fibers are typically more delicate and require greater care during installation. FBGs nevertheless offer a major advantage in applications requiring a large number of sensors: tens of FBG sensors can be multiplexed along a single optical fiber, whereas conventional RTDs typically require four electrical wires per sensor. RTDs are intrinsically insensitive to strain, which can simplify the determination of temperature and potentially enable higher measurement accuracy. FBGs, on the other hand, are dielectric and therefore particularly well suited to environments with high electric fields.
+
+
+
+%The Phase-I DUNE detector consists of two modules: one based on the Vertical Drift (FD-VD) concept and the other on the Horizontal Drift (FD-HD) concept. The FD-VD module has two anode planes located at the top and bottom of the cryostat, with a cathode positioned at mid-height. The FD-HD module consists of four independent drift volumes, each delimited by a sandwich of three anode planes and two cathode planes.
+
+%RTD technology will be used in the FD-HD detector. Twenty-five arrays of eight sensors each will instrument each anode plane, providing a detailed temperature map with particular emphasis on the vertical temperature gradient. A similar configuration is not feasible in the FD-VD detector because the cathode is maintained at a potential of approximately 320 kV. Electrical cables cannot therefore be deployed in the vicinity of the active volume, as they would have to cross regions at significantly different electric potentials.
+
+%The current design for the DUNE Far Detector - Vertical Drift (FD-VD) module therefore foresees the deployment of several optical fibers vertically across the detector active volume. Each fiber will contain an array of approximately 20–30 FBG sensors, enabling measurements of the vertical temperature gradient at multiple locations throughout the detector.
+In the current design for the DUNE Far Detector - Vertical Drift (FD-VD) module, several optical fibers will be installed vertically across the detector active volume. This approach avoids the need for electrical cables in the vicinity of the active volume, where the cathode operates at a high voltage of approximately 320 kV. Each fiber will contain an array of approximately 20–30 FBG sensors, enabling temperature measurements at multiple locations along the vertical direction and providing a detailed characterization of the temperature gradient.
+
+The requirement to measure temperature with a precision better than 5 mK translates into stringent requirements on both the interrogator and the FBG fibers. In particular, the temperature sensitivity of an FBG depends significantly on the properties of its fiber coating, especially at cryogenic temperatures. Several coating technologies suitable for operation in cryogenic environments will therefore be investigated as part of this R\&D program.
+
+
+%\subsection{RTD sensors (PT-103)}
+%Definir las características 
+
+% ==========================================
+%\section{State of the art of FBG base temperature sensing (Jordi+Sara)} 
+%\section{Influence of coating in FBG sensitivity} (commented by Nadia, see below)
+\section{Cryogenic sensing with FBGs}
+% ==========================================
+\label{sec:fbgs}
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+%\subsection{Sensitivity contributions} (commented by Nadia, see below)
+\subsection{Sensitivity influencing factors}
+\label{subsec:sensitivity}
+
+%------------------------------------------------------
+% \begin{itemize}
+%     \item Overview of optical fibers as sensors.
+%     \item Principles of Fiber Bragg Gratings (FBGs).
+%     \item The Bragg condition formula:
+%     \begin{equation}
+%         \lambda_B = 2 n_{\text{eff}} \Lambda
+%     \end{equation}
+%     where $\lambda_B$ is the Bragg wavelength, $n_{\text{eff}}$ is the effective refractive index, and $\Lambda$ is the grating period \cite{Othonos1997}.
+%     \item Explanation of how temperature and strain affect the Bragg wavelength:
+%     \begin{equation}
+%         \frac{\Delta \lambda_B}{\lambda_B} = (1 - P_e)\varepsilon + (\alpha + \xi)\Delta T
+%     \end{equation}
+%     where $P_e$ is the photo-elastic coefficient, $\varepsilon$ is strain, $\alpha$ is the thermal expansion coefficient, and $\xi$ is the thermo-optic coefficient \cite{Rao1997}.
+% \end{itemize}
+
+\begin{itemize}
+    \item Current advancements in FBG thermal sensitivity at cryogenic temperatures \cite{James2002}.
+    \item Comparison of standard setups used in the literature (e.g., climatic chambers, helium cryostats) \cite{Lupi2008}.
+    \item Why our specific pressure-based approach provides novel insights or specific validation?
+\end{itemize}
+
+At ambient temperature ($300~\text{K}$), the wavelength shift of a bare silica FBG is governed almost entirely by the thermo-optic effect of fused silica ($dn/dT \approx 8.6 \times 10^{-6}~\text{K}^{-1}$), which accounts for over 90\% of the standard $\sim$10~pm/K sensitivity, while thermal expansion contributes negligibly ($\alpha_{\text{silica}} \approx 0.5 \times 10^{-6}~\text{K}^{-1}$). In cryogenic conditions ($77$--$93~\text{K}$), however, the thermo-optic coefficient drops by nearly an order of magnitude (down to $<1.0 \times 10^{-6}~\text{K}^{-1}$) and the thermal expansion of silica becomes negligible ($\alpha_{\text{silica}} < 0.2 \times 10^{-6}~\text{K}^{-1}$), causing the intrinsic sensitivity of bare silica gratings to collapse to less than $1.5~\text{pm/K}$~\cite{Lupi2008,Salin2008,Rajan2013}. To recover high thermal responsivity in cryogenic noble liquid detectors, the optical fiber is functionalized with a polymeric coating that serves as a mechanical thermal transducer:
+\begin{equation}
+    \frac{\Delta \lambda_B}{\lambda_B} = (\alpha_{\text{silica}} + \zeta) \Delta T + (1 - p_e) \epsilon_z,
+    \label{eq:fbg_coating_strain}
+\end{equation}
+where $\zeta = (1/n)(dn/dT)$ is the normalized thermo-optic coefficient, $p_e \approx 0.22$ is the effective photoelastic constant, and $\epsilon_z$ is the total longitudinal strain in the silica core. Under tension-free mounting 
+%in the calibration capsule (where external mechanical loads are negligible, $\epsilon_z^{\text{mech}} \approx 0$), 
+the axial strain is purely thermally driven by the differential contraction between the polymer jacket and the glass: $\epsilon_z = \eta (\alpha_{\text{coating}} - \alpha_{\text{silica}}) \Delta T$, where $\eta \le 1$ represents the interfacial strain-transfer efficiency. Because polymer materials maintain cryogenic thermal expansion coefficients orders of magnitude higher than silica ($\alpha_{\text{coating}} \sim 15$--$35 \times 10^{-6}~\text{K}^{-1}$ at $77~\text{K}$, as summarized in Table~\ref{tab:material_cte}), the contracting jacket exerts a strong axial compressive strain on the fiber core, enhancing the cryogenic thermal sensitivity up to $15$--$35~\text{pm/K}$~\cite{Lupi2008,Zhao2007,Rajan2013}.
+
+\begin{table}[htpb]
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{4.5pt}
+    \caption{Thermal expansion properties and integrated cryogenic contraction of the optical fiber constituents.}
+    \label{tab:material_cte}
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Material} & $\boldsymbol{\alpha_{300\,\text{K}}}$ & $\boldsymbol{\alpha_{77\,\text{K}}}$ & $\boldsymbol{\Delta L/L}$ & \textbf{Structural Role} \\
+                          & ($10^{-6}\,\text{K}^{-1}$)           & ($10^{-6}\,\text{K}^{-1}$)          & ($300\to 77\,\text{K}$)   &                          \\
+        \midrule
+        Fused silica        & $\sim 0.5$    & $< 0.2$   & $\sim 0.01\%$       & Core / Cladding glass~\cite{NIST_CryoMaterials} \\
+        Polyimide           & $30$--$40$    & $12$--$20$ & $\sim 0.4$--$0.6\%$ & Primary buffer coating~\cite{Zhao2007,NIST_CryoMaterials} \\
+        PEEK                & $45$--$50$    & $20$--$30$ & $\sim 1.0$--$1.2\%$ & Thermoplastic jacket~\cite{NIST_CryoMaterials} \\
+        Ormocer / Ormocer-T & $100$--$130$  & $25$--$40$ & $\sim 1.2$--$1.5\%$ & Hybrid optical polymer~\cite{Popall1998} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The magnitude of the strain transferred to the fiber core depends fundamentally on the cross-sectional area ratio between the jacket and the glass, $A_{\text{coating}}/A_{\text{glass}} = (D^2 - d^2)/d^2$ (where $d = 125~\mu\text{m}$ is the cladding diameter and $D$ is the outer coating diameter), as well as the elastic modulus and interfacial adhesion of the polymer~\cite{Bock2004,Zhao2007}. Consequently, increasing the coating thickness from a standard thin layer ($D \approx 200~\mu\text{m}$, $A_{\text{coating}}/A_{\text{glass}} \approx 1.56$) to an extruded thick jacket ($D \approx 440$--$450~\mu\text{m}$, $A_{\text{coating}}/A_{\text{glass}} \approx 11.5$) markedly amplifies the mechanical force exerted on the grating, providing a systematic handle to study the trade-off between thermal responsivity, mechanical stiffness, and response time.
+
+
+%-------------------------------------------------
+%\subsection{Tested Fibers and Coatings} (commented by Nadia, see below)
+\subsection{FBGs and coatings tested}
+\label{subsec:fibers}
+
+For deployment in large-scale noble liquid time projection chambers such as DUNE, coating selection is constrained by strict chemical purity and cryogenic resilience. Polymers must exhibit negligible outgassing of electronegative contaminants (such as $\text{O}_2$ and $\text{H}_2\text{O}$) to prevent the attenuation of drifting ionization electrons~\cite{Acciarri2020ProtoDUNE}, while maintaining high mechanical adhesion to prevent micro-cracking or delamination under rapid thermal cycles between $300~\text{K}$ and $77~\text{K}$. To evaluate these criteria, five commercial fiber configurations encompassing three representative coating classes were characterized:
+\begin{itemize}
+    \item \textbf{Ormocer and Ormocer-T:} Organic-inorganic hybrid optical polymers (developed by Fraunhofer-ISC~\cite{} and commercialized by FBGS~\cite{}) combining inorganic polysiloxane networks with cross-linked organic side chains, offering strong chemical bonding to silica and elevated thermal durability~\cite{Popall1998}.
+    \item \textbf{Polyimide:} High-temperature aromatic polymer (ENGIONIC~\cite{}) widely recognized for its high radiation hardness, vacuum compatibility, and low outgassing, extensively used in aerospace and cryogenic instrumentation~\cite{Zhao2007}.
+    \item \textbf{PEEK:} Polyether ether ketone (ENGIONIC), an advanced semi-crystalline thermoplastic with high mechanical strength, tested in both thin-jacket ($200~\mu\text{m}$) and thick-jacket ($440$--$450~\mu\text{m}$) geometries to isolate the structural influence of coating volume~\cite{NIST_CryoMaterials,Rajan2013}.
+\end{itemize}
+
+The technical specifications of the characterized fiber samples, along with their nominal dimensions, grating count, and suppliers, are summarized in Table~\ref{tab:fiber_specs}.
+
+\begin{table}[htpb]
+    \centering
+    \scriptsize
+    \setlength{\tabcolsep}{4pt}
+    \caption{Technical specifications of the characterized optical fibers and polymer coatings tested across the $77$--$93~\text{K}$ cryogenic calibration campaign.}
+    \label{tab:fiber_specs}
+    \begin{tabular}{llccccc}
+        \toprule
+        \textbf{Fiber ID} & \textbf{Coating Material} & \textbf{Coating} & \textbf{Cladding} & \textbf{FBGs Total} & \textbf{FBG Length} & \textbf{Supplier} \\
+                          &                            & ($\mu\text{m}$)  & ($\mu\text{m}$)   & (In Cryo)           & (mm)                &                   \\
+        \midrule
+        DW-3              & Ormocer-T                  & 200              & 125               & 5 (4)               & 10                  & FBGS              \\
+        FBGS-2            & Ormocer                    & 200              & 125               & 4 (4)               & 8                   & FBGS              \\
+        PEEK-3            & PEEK                       & 200              & 125               & 1 (1)               & 5                   & ENGIONIC          \\
+        POLY-2            & Polyimide                  & 200              & 125               & 4 (2)               & 9                   & ENGIONIC          \\
+        PEEK-4            & PEEK (Thick jacket)        & 440--450         & 125               & 3 (2)               & 5                   & ENGIONIC          \\
+        PEEK-7            & PEEK (Thick jacket)        & 410--420         & 125               & 3 (2)               & 5                   & ENGIONIC          \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+
+
+% ==========================================
+%\section{Experimental setup and measurement procedure} (commented by Nadia, suggestion below)
+\section{FBGs testing methods}
+\label{sec:setup}
+% Add subsection for the sole description of the experimental setup - Nadia 
+\subsection{Experimental Setup}
+% ==========================================
+The experimental setup used for the thermal characterization of FBG fibers is schematically shown in Fig.~\ref{fig:setup}. It consist of four main elements, the pressurized vessel, the gas line, the sensing assembly and the readout, which are described below. 
+
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.99\textwidth]{figures/pressure_setup.png} \\
+    \includegraphics[width=0.32\textwidth]{example-image-a}
+    \includegraphics[width=0.32\textwidth]{example-image-a}
+    \includegraphics[width=0.32\textwidth]{example-image-a}
+    \caption{Top: Schematic of the pressure-based experimental setup
+    Key experimental stages during the measurement procedure: (a) Optical fiber wound around the cylindrical support housed within the aluminum capsule alongside the reference RTDs; (b) Controlled stepwise immersion of the sensing rod into the liquid nitrogen bath using mechanical spacers to mitigate thermal shock; (c) Top CF-40 cross assembly showing the hermetically sealed flange with optical and electrical feedthroughs; and (d) Hermetically sealed cryostat operating under high pressure (3--4~bar), exhibiting atmospheric frosting along the neck during stable plateau acquisition.}
+    \label{fig:setup}
+\end{figure}
+
+The sensing assembly consists of a cylindrical XX mm diameter 3D printed support (see Fig.~\ref{fig:setup}-bottom-left),  where two calibrated reference RTDs fit into diametrically opposed slots. The optical fiber is wound around the outer perimeter of the cylinder directly over the RTD locations, with the fiber end softly secured via a teflon clamp to prevent slipping. The sensing assembly is housed within a protective aluminum capsule with dimensions 12 cm(height) x 5cm (diameter), used for slow cool-down and warm up, using the method described in \cite{RTDs_paper}. The capsule is mounted at the bottom of a long insertion stainless steel rod that guides an internal optical patch cord (coupled to the test fiber) and the RTD wiring to the top flanges (Fig.~\ref{fig:setup}-bottom-middle). The entire assembly is inserted into a 160 cm diameter, 400 mm height, vacuum tight vessel, partially insulated with polystyrene xxx and instrumented with several ports arranged across two levels (Fig.~\ref{fig:setup}-bottom-right). At the lower neck level, with two lateral CF63 ports. One port connects to the pressure line, equipped with a digital pressure transmitter (with local display) interfaced to an Arduino board for continuous computer logging, a release valve set at 5 bar and a fine-metering manual valve to control the vessel pressure. The opposite port provides the electrical feedthrough for the internal diagnostic RTD array used to monitor the liquid bath level. The upper CF-40 cross, has its upper flange---opened for capsule insertion.... This top cross incorporates two lateral CF40 flanges, one equipped with optical feedthroughs (supporting up to two fibers) routed to the FAZT I4-16 interrogator, and the opposite one providing the dedicated electrical feedthrough for the two reference RTDs in the sensing assembly. 
+
+The data acquisition system consists of two independent modules, one for optical signal interrogation and one for RTD monitoring, synchronized through a post-acquisition time-stamping procedure. The FBG sensors were interrogated using a FAZT I4-16 optical interrogator (Femto Sensing International). The instrument provides 16 optical channels and supports up to 30 FBG sensors per channel. The interrogator operates over a wavelength range of 1529–1568.2 nm, with a wavelength resolution of 1 pm and an absolute accuracy below 1 pm, and supports both static and dynamic measurements, with a scan frequency of up to 200 Hz for parallel FBG measurements \cite{FemtoSenseManual}.
+
+The RTD readout system provides a precise 1 mA excitation current and multiplexes signals from up to 24 channels. Voltages are measured using a National Instruments CompactRIO-FPGA equipped with a 24-bit NI-9238 analogue input module, and resistance values are converted to temperature using the Callendar–Van Dusen equation. The system's performance was evaluated in \cite{RTDs_paper}, demonstrating sub-millikelvin precision.
+
+% Add subsection for the description of the operating protocol - Nadia
+\subsection{Operating protocol}
+
+The experimental procedure exploits the thermodynamic equilibrium between vessel pressure and the boiling temperature of liquid nitrogen to perform an in-situ calibration of the FBG sensors across the 77--93~K window without requiring active electrical heating. The operational protocol is structured into six sequential operational phases, with key experimental stages illustrated in Fig.~\ref{fig:setup}:
+
+\begin{enumerate}
+    \item \textbf{Sensor preparation:} 
+    
+    \item \textbf{Vessel cooldown} liquid nitrogen ($\text{LN}_2$) is transferred into the vessel until the diagnostic RTD array is submerged, followed by an open pre-cooling period ($\sim$40 minutes) to cool down the cryostat mass and allow violent convective boiling to subside.
+    
+    \item \textbf{Capsule insertion and cooldown:} The insertion rod carrying the capsule is gradually lowered into the cryogenic bath using mechanical spacers. The capsule opening at the top is kept above the LN2 level until the temperature registered by the inner RTDs drops below 85 K, minimizing in that way the thermal shock when liquid enters in the capsule.  
+    
+    \item \textbf{Vessel sealing and instrumentation interfacing:} The upper CF-40 flange---opened for capsule insertion---is hermetically sealed using a cryogenic copper gasket tightened in three progressive torque stages (8, 12, and $14~\text{N}\cdot\text{m}$) to guarantee confinement up to 5~bar. 
+    
+    \item \textbf{High-pressure equilibration phase:} 
+    %Once the vessel is sealed and the exhaust metering valve is fully closed to prevent gas escape, autogenous nitrogen boil-off naturally builds up the vessel pressure to approximately 3.0--$4.0~\text{bar}$ absolute. Although the target pressure is reached within minutes, global thermodynamic equilibrium across the liquid bath requires approximately 1.0 to 1.5~hours to establish. Because the cryostat contains no active electrical heaters, warming the bulk liquid nitrogen from 77~K up to the high-pressure saturation temperature ($\sim$90--93~K) relies entirely on passive ambient heat inleak and vapour condensation. The system is held at fixed high pressure until the temperatures of all submerged sensors converge and stabilize into a steady horizontal plateau, confirming global liquid-vapour phase equilibrium (Fig.~\ref{fig:measurement_procedure_photos}d).
+    Once sealed with the exhaust metering valve closed, autogenous nitrogen boil-off raises the vessel pressure to approximately 4.0 bar within minutes. However, global thermodynamic equilibrium requires 1.0--1.5 hours, as passive ambient heat in-leak and vapor condensation warm the liquid nitrogen from 77~K to the high-pressure saturation temperature ($\sim$90--93~K). The pressure is maintained until all submerged sensor temperatures converge and stabilize at a horizontal plateau, confirming liquid-vapor equilibrium (Fig.~\ref{}).
+    
+    \item \textbf{Descending stepped depressurisation and plateau acquisition:} 
+    %Once global thermodynamic equilibrium is established, the measurement protocol proceeds exclusively in descending pressure steps. Releasing boil-off gas through the manual fine-metering valve reduces the vessel pressure in controlled decrements of approximately $0.3$--$0.5~\text{bar}$ down to atmospheric level ($\sim$0.9--1.0~bar absolute). During depressurisation, bulk liquid boiling provides immediate, uniform heat extraction, enabling rapid thermal tracking. Following each valve adjustment, the pressure is maintained for several minutes to allow the liquid bath to equilibrate at the new saturation temperature.
+    Once global thermodynamic equilibrium is established, pressure is reduced in controlled 0.3--0.5 steps by releasing boil-off gas through the manual fine-metering valve, down to atmospheric pressure ($\sim$0.9--1.0~bar absolute). After each adjustment, pressure is held until the bath stabilizes at the new saturation temperature, followed by a 15--20-minute measurement period before proceeding to the next step. 
+\end{enumerate}
+
+Throughout the stepped sequence, the vertical RTD array continuously tracks the liquid level, ensuring that the active sensing capsule remains fully immersed as the upper bath surface gradually recedes during boil-off. The Bragg peak wavelengths ($\lambda_B$), RTD temperatures, and vessel pressure readings are continuously recorded by their respective acquisition systems. 
+
+Crucially, to rigorously assess measurement repeatability and verify resilience against thermal cycling, each fiber configuration was subjected to three independent experimental runs -- including all six steps described above --  performed on separate days. Between consecutive runs, the cryostat was completely warmed up to room temperature, subjecting the sensors to complete thermal cycles ($300~\text{K} \leftrightarrow 77~\text{K}$) and confirming that the extracted thermal sensitivities are reproducible and free from cryogenic degradation or hysteresis. 
+
+% Add subsection for the descrioption of the analisis procedures ans steps before section 4 (Results). Enumerate or ietmize the different analysis step (selection of plateaux,...) - Nadia
+\subsection{Analysis procedures}
+
+Fig.~\ref{fig:n2_saturation_with_data} presents the experimental pressure--temperature pairs for the 124 independent thermodynamic plateaus gathered across six distinct fiber test campaigns encompassing 18 cooldown runs, together with the theoretical nitrogen saturation curve from the NIST Chemistry WebBook (SRD 69, Antoine parameterisation by Edejer \& Thodos, 1967~\cite{Edejer1967}). The agreement confirms that thermodynamic equilibrium was achieved. 
+
+%---------------------------------------
+%---------------------------------------
+%\subsubsection{Vessel Thermodynamics and Pressure Control (Vicky)}
+
+
+%To validate the thermodynamic equilibrium of the liquid bath across the complete experimental campaign, steady-state plateaus ($\ge 240~\text{s}$ duration, standard deviation $\sigma_P < 0.15~\text{bar}$) were systematically extracted across all calibration runs. A total of 124 independent thermodynamic plateaus were gathered across six distinct fiber test campaigns encompassing 18 cooldown runs. 
+%: PEEK ($450~\mu\text{m}$, 3 runs, $N=18$), PEEK-3/FBGS-2 (2025 setup, $N=7$), PEEK-3 ($200~\mu\text{m}$, 3 runs, $N=18$), FBGS-2/ORMOCER ($200~\mu\text{m}$, 3 runs, $N=27$), Polyimide-2 ($200~\mu\text{m}$, 3 runs, $N=30$), and PEEK-4 ($200~\mu\text{m}$, 3 runs, $N=24$). In each plateau, the reference bath temperature $T_{\text{RTD}}$ was measured using the calibrated RTD sensor placed directly inside the fiber capsule (sensor RTD~7). Because liquid--vapour phase equilibrium is an intrinsic thermodynamic property of the bulk nitrogen bath independent of the optical fiber housed in the capsule, all 124 plateaus are presented as a unified experimental dataset in Figure~\ref{fig:n2_saturation_with_data}, demonstrating the long-term thermodynamic stability and reproducibility of the cryostat over several months of operation.
+%Fig.~\ref{fig:n2_saturation_with_data} presents the experimental pressure--temperature pairs together with the theoretical nitrogen saturation curve from the NIST Chemistry WebBook (SRD 69, Antoine parameterisation by Edejer \& Thodos, 1967~\cite{Edejer1967}):
+%\begin{equation}
+%    \log_{10}(P_{\text{abs}}/\text{bar}) = A - \frac{B}{T + C},
+%    \label{eq:antoine}
+%\end{equation}
+%with NIST reference coefficients $A = 3.7362$, $B = 264.651$, and $C = -6.788~\text{K}$. An unconstrained three-parameter Antoine fit to our 124 experimental plateaus yields:
+%\begin{equation}
+%    A_{\text{fit}} = 2.9085, \quad B_{\text{fit}} = 152.08, \quad C_{\text{fit}} = %-25.25~\text{K},
+%    \label{eq:antoine_fit}
+%\end{equation}
+%with a root-mean-square error (RMSE) of $0.235~\text{K}$ relative to the fit. The numerical difference in effective parameters reflects the well-known collinearity among Antoine coefficients over a bounded cryogenic window ($\Delta T \approx 16~\text{K}$), while yielding physical temperature predictions identical to NIST within $<0.25~\text{K}$ across the entire operating range.
+
+%The lower panel of Figure~\ref{fig:n2_saturation_with_data} displays the temperature residuals relative to the NIST theoretical saturation curve, $\Delta T = T_{\text{RTD}} - T_{\text{NIST}}(P_{\text{abs}})$. Across all 124 plateau points collected over months of testing, the global mean residual is only $\langle \Delta T \rangle = -0.14~\text{K}$ with an overall $\text{RMSE} = 0.28~\text{K}$ ($\langle \Delta T \rangle = -0.09~\text{K}$, $\text{RMSE} = 0.21~\text{K}$ for the 2026 calibration campaign). While the calibrated RTD readout achieves high milli-Kelvin relative resolution ($<5~\text{mK}$), the small sub-Kelvin dispersion across calibration runs is governed by external experimental factors: unmonitored local barometric variations around standard conditions ($\pm 20~\text{mbar} \approx \pm 0.09~\text{K}$), pressure transducer accuracy, and the residual hydrostatic head of the immersed liquid bath. With 80\% of all plateaus (and nearly 87\% of the 2026 campaign) lying within the $\pm 0.3~\text{K}$ uncertainty band, and all points without exception remaining strictly within the sub-Kelvin domain ($|\Delta T| < 0.88~\text{K}$), these results firmly confirm that liquid--vapour saturation equilibrium was rigorously maintained, validating the RTD readings as an absolute temperature reference for the subsequent FBG sensitivity calibration.
+
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/n2_saturation_all_fibers2.png}
+    \caption{Thermodynamic equilibrium validation of the cryogenic vessel. Top panel: Measured absolute vessel pressure $P_{\text{abs}} = P_{\text{gauge}} + P_{\text{atm}}$ ($P_{\text{atm}} = 1.006~\text{bar}$, Paterna, Valencia) as a function of the calibrated capsule RTD temperature $T_{\text{RTD}}$ for all 124 steady-state plateaus gathered across the complete calibration campaign. Error bars represent the temporal standard deviations ($\pm 1\sigma_T, \pm 1\sigma_P$) within each plateau window (often smaller than marker size). The solid line represents the experimental Antoine fit (Eq.~\ref{eq:antoine_fit}), while the dashed line denotes the theoretical nitrogen saturation curve from NIST~\cite{Lemmon2025NIST,Edejer1967}. Bottom panel: Temperature residuals $T_{\text{RTD}} - T_{\text{NIST}}$ relative to the NIST reference, demonstrating consistent sub-Kelvin equilibrium ($\text{RMSE} = 0.28~\text{K}$) with 80\% of plateaus falling within the $\pm 0.3~\text{K}$ experimental uncertainty band (shaded area).}
+    \label{fig:n2_saturation_with_data}
+\end{figure}
+
+
+
+% \textbf{Plateau selection and uniform duration standardisation:}
+% Following each descending depressurisation step, the time-series records of pressure, reference temperature, and optical wavelength are inspected to identify steady-state thermodynamic equilibrium intervals. The initial transient phase immediately following valve adjustment---characterised by convective bulk boiling and rapid thermal tracking---is systematically discarded. Stationary plateau windows are selected within the flat, fully equilibrated tail of each pressure dwell. To guarantee rigorous statistical objectivity and prevent longer dwells from disproportionately weighting the regression, all plateau intervals within a given run are standardized to a strictly identical temporal duration ($\Delta t$), chosen to match the shortest stable dwell recorded during that cycle (typically between $5$ and $11~\text{minutes}$ depending on the run; $\Delta t = 9.0~\text{minutes}$ in the representative calibration of Fig.~\ref{fig:data_workflow}). This equal-duration truncation ensures that every calibration point represents an identical sample size ($N$) and uniform thermal integration depth.
+
+% \textbf{Statistical reduction and intra-plateau uncertainty:}
+% Within each standardised window, representative temperature and Bragg wavelength centroids ($\mu_T, \mu_\lambda$) are obtained from the arithmetic means of the stationary traces, with centroid uncertainties evaluated through the Standard Error of the Mean ($\text{SEM} = \sigma / \sqrt{N}$). Given the massive sample size ($N \sim 10^4$--$10^5$ samples at 250~Hz per plateau), high-frequency instrumentation noise is strongly suppressed, yielding sub-millikelvin and sub-picometer centroid uncertainties.
+
+% \textbf{Sensitivity extraction and thermal repeatability hierarchy:}
+% The extraction of thermal responsivity proceeds through a three-tier regression and error propagation hierarchy:
+% \begin{enumerate}
+%     \item \textit{Single-run regression:} For each individual FBG sensor, the effective optical response is obtained by averaging the two orthogonal polarization states, $\lambda_B(t) = (\lambda_{B,P}(t) + \lambda_{B,S}(t)) / 2$, which effectively cancels out small birefringence-induced peak shifts. A linear least-squares regression is then directly performed across the standardized plateau centroids:
+%     \begin{equation}
+%         \lambda_B(T) = \lambda_0 + S \cdot (T - T_0),
+%         \label{eq:linear_sensitivity}
+%     \end{equation}
+%     yielding the single-run cryogenic thermal sensitivity $S$ ($\text{pm/K}$) and its analytical fit uncertainty $\sigma_{\text{fit}}$.
+
+    
+%     \item \textit{Thermal cycling repeatability across independent runs:} Because single-run fit uncertainties reflect only short-term statistical noise, the true experimental uncertainty is governed by repeatability under successive thermal shocks. For each sensor $j$, the calibration is repeated across $R = 3$ independent cooldown cycles ($300~\text{K} \leftrightarrow 77~\text{K}$), yielding three independent slopes $\{S_{j,1}, S_{j,2}, S_{j,3}\}$. The characteristic sensor sensitivity is defined by the mean:
+%     \begin{equation}
+%         \bar{S}_j = \frac{1}{R} \sum_{r=1}^{R} S_{j,r},
+%     \end{equation}
+%     while the repeatability uncertainty is evaluated as the sample standard deviation across runs:
+%     \begin{equation}
+%         \sigma_{\text{rep}, j} = \sqrt{\frac{1}{R - 1} \sum_{r=1}^{R} (S_{j,r} - \bar{S}_j)^2}.
+%         \label{eq:repeatability_error}
+%     \end{equation}
+    
+%     \item \textit{Global fiber array sensitivity:} For multi-sensor arrays comprising $M$ active gratings, the global fiber sensitivity is computed as the unweighted mean $\bar{S}_{\text{fiber}} = \frac{1}{M} \sum_{j=1}^{M} \bar{S}_j$. The inter-sensor dispersion $\sigma_{\text{fiber}} = \text{std}(\bar{S}_j)$ quantifies longitudinal coating uniformity along the fiber length.
+% \end{enumerate}
+
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=1.0\textwidth]{figures/workflow_diagram.pdf}
+    \caption{Key milestones of the data reduction and sensitivity extraction workflow illustrated for sensor 1 of the PEEK-4 fiber (Run~1, $400\,\mu\text{m}$ coating diameter): (a) Identification of seven steady-state equilibrium plateaus ($P_1$--$P_7$, shaded teal bands) during stepped depressurisation spanning $76.5$--$92.0~\text{K}$, displaying synchronised reference temperature $T_{\text{RTD}}(t)$ (RTD-8 inside the capsule, left axis) and Bragg wavelength $\lambda_B(t)$ (right axis); (b) Zoom-in of representative plateau $P_2$ ($T = 90.70~\text{K}$) over a standardised dwell of $\Delta t = 9.0~\text{min}$ ($N = 67{,}500$ points at $250~\text{Hz}$), showing the stable wavelength trace, centroid mean $\mu_\lambda$, intra-plateau uncertainty band ($\pm\text{SEM}_\lambda = \pm 0.001~\text{pm}$), and raw noise spread ($\pm 1\sigma = \pm 0.22~\text{pm}$); and (c) Final linear least-squares regression applied to the set of plateau centroids ($\mu_\lambda$ vs. $\mu_T$), yielding the cryogenic thermal sensitivity slope ($S = 17.76 \pm 0.03~\text{pm/K}$, $R^2 = 0.99999$).}
+    \label{fig:data_workflow}
+\end{figure}
+
+%To ensure clarity and reproducibility, the mathematical parameters, stability criteria, and statistical estimators employed in the data reduction process are summarised in Table~\ref{tab:analysis_params}.
+
+% \begin{table}[htpb]
+%     \centering
+%     \small
+%     \caption{Mathematical parameters, stability criteria, and statistical estimators employed in the data reduction and sensitivity analysis.}
+%     \label{tab:analysis_params}
+%     \begin{tabular}{lll}
+%         \toprule
+%         \textbf{Analysis Stage} & \textbf{Parameter / Criterion} & \textbf{Adopted Value / Estimator} \\
+%         \midrule
+%         Plateau Selection   & Transient Discard               & Post-depressurisation boiling phase excluded \\
+%                             & Equilibrium Identification      & Fully equilibrated tail ($\sigma_P \ll 0.05~\text{bar}$) \\
+%                             & Window Duration Standardisation & Uniform duration $\min(\Delta t_{\text{plateau}})$ ($\sim 5$--$11~\text{min}$) \\
+%         \midrule
+%         Statistical Reduction & Central Tendency Estimator    & Arithmetic Mean ($\mu_T, \mu_\lambda$) \\
+%                             & Intra-Plateau Uncertainty       & Standard Error of the Mean ($\text{SEM} = \sigma / \sqrt{N}$) \\
+%         \midrule
+%         Sensitivity Fit     & Single-Run Regression Model     & Linear Least-Squares ($\lambda_B = \lambda_0 + S \cdot \Delta T$) \\
+%                             & Polarization Combination        & Unweighted Mean $S_{\text{run}} = (S_P + S_S)/2$ \\
+%                             & Repeatability Across Runs ($R=3$) & Sample Standard Deviation ($\sigma_{\text{rep}}$) \\
+%                             & Array Homogeneity ($M$ FBGs)    & Inter-sensor Standard Deviation ($\sigma_{\text{fiber}}$) \\
+%         \bottomrule
+%     \end{tabular}
+% \end{table}
+
+
+% ==========================================
+\section{Results and discussion}
+% ==========================================
+\label{sec:results}
+
+%--------------------------------------------------------------------------
+ \subsection{Temperature Sensitivity of Different Fiber Configurations}
+ \label{subsec:temp_sensitivity}
+%--------------------------------------------------------------------------
+
+% The thermal sensitivity of each optical fiber was experimentally evaluated in the cryogenic setup using the manual pressure-regulated plateau method in liquid nitrogen ($77\text{--}92\text{ K}$). By establishing stationary plateaus at discrete pressure levels, thermal equilibrium is guaranteed between the liquid nitrogen bath, the copper reference capsule, and the optical fibers, effectively removing transient dynamic lag.
+
+% -------------------------------------------------------------------------
+% \subsubsection{Representative Single-Run Calibration: PEEK-4}
+% -------------------------------------------------------------------------
+
+% \begin{figure}[htpb]
+%     \centering
+%     \includegraphics[width=\textwidth]{figures/fig1_peek4_control_plot.pdf}
+%     \caption{Representative thermal sensitivity analysis for PEEK-4 fiber during a single experimental run (09-06-2026). \textbf{(a)} Synchronized time series of reference temperature (RTD-8) and Bragg wavelength across eight stabilized pressure plateaus (P1--P8). \textbf{(b)} Linear sensitivity regression based on plateau mean values, showing the individual orthogonal polarization modes (P and S) and the polarization-averaged response.}
+%     \label{fig:control_plot_run1}
+% \end{figure}
+
+For each individual FBG sensor, the effective optical response is obtained by averaging the two orthogonal polarization states, thereby mitigating small peak shifts induced by birefringence. Fig.~\ref{fig:data_workflow} shows the RTD and FBG signals plotted together, revealing their close correlation. To minimize the effects of thermal inertia and transient instabilities during pressure changes, the FBG thermal sensitivity is extracted from seven well-defined plateaus, each standardized to the same duration within a given run (typically 5--11~minutes). For each plateau, the representative temperature and Bragg wavelength are calculated as the arithmetic means of the corresponding stationary traces, with their uncertainties estimated using the standard error of the mean (SEM). Owing to the large number of samples, these uncertainties are below the millikelvin and picometer levels for temperature and wavelength, respectively.
+
+
+A linear least-squares regression is then directly performed across the plateau centroids, $\lambda_B(T) = \lambda_0 + S \cdot (T - T_0)$, being $S$ the fiber thermal sensitivity.  HABRIA QUE ESTABLECER LA RELACION ENTRE S Y LOS PARAMETROS DE LA ECUACION 1
+The linear regression parameters for a single representative run are summarized in Table~\ref{tab:peek4_run1_summary}. Across both sensors, the thermal response demonstrates outstanding linearity with determination coefficients $R^2 \ge 0.9999$ and fit uncertainties below $0.08\text{ pm/K}$. Furthermore, orthogonal polarization states (P and S) exhibited negligible cross-polarization discrepancy. 
+%($|\Delta S_{\text{P-S}}| \le 0.01\text{ pm/K}$ for Sensor~1 and $\le 0.34\text{ pm/K}$ for Sensor~2), confirming that tracking the polarization mean effectively cancels residual birefringence effects without degrading measurement accuracy.
+
+
+\begin{table}[htpb]
+    \centering
+    \caption{Thermal sensitivity linear fit parameters for PEEK-4 fiber during Run~1 (09-06-2026, mean polarization).}
+    \label{tab:peek4_run1_summary}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Sensor} & \textbf{Sensitivity (pm/K)} & $\mathbf{R^2}$ \\
+        \midrule
+        Sensor 1 & 17.76 $\pm 0.04$ & 0.9999 \\
+        Sensor 2 & 19.38 $\pm 0.08$ & 0.9999 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+
+% -------------------------------------------------------------------------
+% \subsubsection{Run-to-Run Repeatability Analysis}
+% -------------------------------------------------------------------------
+
+% To evaluate long-term calibration repeatability and structural baseline stability, each fiber underwent $n = 3$ independent thermal cooldown cycles carried out on different experimental days. Between consecutive runs, the system was fully warmed to room temperature; in dedicated validation experiments (e.g., DW-3), the fibers were completely unspooled from their mounting fixtures and rewound to confirm independence from installation-induced mechanical tension.
+
+\begin{figure}[htpb]
+    \centering
+    \includegraphics[width=0.78\textwidth]{figures/fig2_peek4_repeatability.pdf}
+    \caption{Run-to-run thermal sensitivity repeatability for the PEEK-4 fiber across three independent experimental cycles. Markers represent the measured sensitivities of Sensor~1 and Sensor~2, with vertical error bars indicating single-run linear fit uncertainties ($u_{\text{fit}}$). The shaded band represents the overall repeatability standard deviation ($\sigma_{\text{rep}} = 0.29\text{ pm/K}$) around the ensemble mean.}
+    \label{fig:peek4_repeatability}
+\end{figure}
+
+Because single-run fit uncertainties capture only short-term statistical fluctuations, the overall experimental uncertainty is primarily governed by the reproducibility of the measurements across independent fiber-winding procedures and successive thermal shocks. For each fiber, the characterization is repeated three times. Fig.~\ref{fig:peek4_repeatability} displays the run-to-run sensitivity evolution for the two sensors of the PEEK-4 fiber across three consecutive measurement days. Individual error bars reflect the single-run fit uncertainty, while the shaded band delineates the global repeatability interval. Both sensors demonstrate remarkably stable performance across cycles, with day-to-day fluctuations below $\pm 0.04\text{ pm/K}$ per sensor, proving that the manual plateau method provides highly repeatable cryogenic calibration.
+
+Because single-run fit uncertainties capture only short-term statistical fluctuations, the overall experimental uncertainty is primarily governed by the reproducibility of measurements across independent fiber-winding procedures and successive thermal shocks. Each fiber is characterized in three independent runs. Fig.~\ref{fig:peek4_repeatability} shows the run-to-run evolution of the thermal sensitivity of the two sensors in the PEEK-4 fiber over three consecutive measurement days. The individual error bars represent the fit uncertainty for each run, while the shaded band indicates the overall repeatability interval. Both sensors exhibit remarkably stable performance across repeated measurements, with day-to-day sensitivity variations remaining within $\pm 0.04\text{ pm/K}$ per sensor. These results demonstrate the high repeatability of the manual plateau-based method for cryogenic calibration. It is worth noting that the thermal sensitivity exhibits substantial dispersion among sensors within the same fiber. The standard deviation of the sensitivity across sensors is therefore used as a metric to assess longitudinal uniformity along the fiber, accounting for variations in both the coating properties and the FBG inscription.
+
+Table~\ref{tab:repeatability_summary} summarizes the thermal sensitivity results for all investigated fiber configurations, reporting the ensemble mean sensitivity, the maximum inter-cycle variation across all sensors within each fiber, and the sensitivity variation between sensors within each fiber. 
+
+\begin{table}[htpb]
+    \centering
+    \small
+    \caption{Summary of cryogenic thermal sensitivity and run-to-run repeatability performance across all tested fiber configurations ($n = 3$ independent runs per fiber).}
+    \label{tab:repeatability_summary}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lcccccc}
+        \toprule
+        \textbf{Fiber ID} & \textbf{Coating} & \textbf{Diameter} & \textbf{Sensors} & \textbf{Mean fiber S} & \textbf{Sensor repeatability} & \textbf{Relative uniformity}\\
+                          & \textbf{Material}& \textbf{($\mu\text{m}$)} & \textbf{($N$)} & \textbf{(pm/K)}          & \textbf{(pm/K)}  & \textbf{(\%)} \\
+        \midrule
+        PEEK-1 & PEEK      & 450 & 1 & 20.59 $\pm$ 0.19 & - & \\
+        PEEK-7 & PEEK      & 450 & 3 & 19.62 $\pm$ 0.72 & & \\
+        PEEK-4 & PEEK      & 400 & 2 & 18.90 $\pm$ 0.29 & 0.04 & \\
+        PEEK-3 & PEEK      & 200 & 1 &  3.09 $\pm$ 0.03 & - & \\
+        FBGS-2 & Ormocer   & 200 & 4 &  7.19 $\pm$ 0.11 & & \\
+        DW-3   & Ormocer-T & 250 & 4 &  4.71 $\pm$ 0.03 & & \\
+        POLY-2 & Polyimide & 200 & 2 &  3.64 $\pm$ 0.08 & & \\
+        \bottomrule
+    \end{tabular}%
+    } 
+\end{table}
+
+
+% \begin{table}[htpb]
+%     \centering
+%     \small
+%     \caption{Summary of cryogenic thermal sensitivity and run-to-run repeatability performance across all tested fiber configurations ($n = 3$ independent runs per fiber).}
+%     \label{tab:repeatability_summary}
+%     \resizebox{\textwidth}{!}{%
+%     \begin{tabular}{lcccccc}
+%         \toprule
+%         \textbf{Fiber ID} & \textbf{Coating} & \textbf{Diameter} & \textbf{Sensors} & \textbf{Mean Sens. $\mu$} & \textbf{Repeatability $\sigma_{\text{rep}}$} & \textbf{Relative Error} \\
+%                           & \textbf{Material}& \textbf{($\mu\text{m}$)} & \textbf{($N$)} & \textbf{(pm/K)}          & \textbf{(pm/K)}                             & \textbf{(\%)} \\
+%         \midrule
+%         PEEK-1 & PEEK      & 450 & 1 & 20.59 & 0.19 & 0.91 \\
+%         PEEK-7 & PEEK      & 450 & 3 & 19.62 & 0.72 & 3.69 \\
+%         PEEK-4 & PEEK      & 400 & 2 & 18.90 & 0.29 & 1.54 \\
+%         PEEK-3 & PEEK      & 200 & 1 &  3.09 & 0.03 & 0.97 \\
+%         FBGS-2 & Ormocer   & 200 & 4 &  7.19 & 0.11 & 1.56 \\
+%         DW-3   & Ormocer-T & 250 & 4 &  4.71 & 0.03 & 0.70 \\
+%         POLY-2 & Polyimide & 200 & 2 &  3.64 & 0.08 & 2.31 \\
+%         \bottomrule
+%     \end{tabular}%
+%     }
+% \end{table}
+
+
+% \begin{figure}[htpb]
+%     \centering
+%     \includegraphics[width=0.92\textwidth]{figures/fig3_global_sensitivity_summary.pdf}
+%     \caption{Global thermal sensitivity summary across all tested coatings and cladding diameters. Semi-transparent points represent individual experimental cycles ($n=3$ per configuration). Solid markers and vertical error bars denote the ensemble mean ($\mu$) and the inter-run standard deviation ($\sigma_{\text{rep}}$), respectively. The dotted vertical line distinguishes thick PEEK fibers from thin-jacketed configurations.}
+%     \label{fig:global_sensitivity_summary}
+% \end{figure}
+
+
+% -------------------------------------------------------------------------
+%\subsubsection{Discussion: Coating Material and Geometric Influences}
+% -------------------------------------------------------------------------
+
+Comparison of PEEK configurations highlights the critical role of coating geometry: thick jackets ($\varnothing\,400\text{--}450\,\mu\text{m}$, represented by PEEK-1, PEEK-4, and PEEK-7) consistently yield sensitivities between $18.90$ and $20.59\text{ pm/K}$. In contrast, the thin PEEK-3 fiber ($\varnothing\,200\,\mu\text{m}$) achieves only $3.09\text{ pm/K}$. The greater cross-sectional area of the $400\,\mu\text{m}$ coating delivers the required elastic force to overcome the mechanical stiffness of the silica core, achieving a six-fold amplification in temperature response.
+
+
+% \begin{enumerate}
+%     \item \textbf{Coating thickness dependency in PEEK fibers:} At temperatures around $87\text{ K}$, the thermo-optic coefficient of bare fused silica drops to near zero ($dn/dT \approx 1\times 10^{-6}\text{ K}^{-1}$), yielding an intrinsic bare fiber sensitivity of only $\sim 1\text{ pm/K}$. The measured thermal response is therefore predominantly driven by the mechanical deformation transferred from the surrounding polymer sheath due to the thermal expansion coefficient (CTE) mismatch. Comparison of PEEK configurations highlights the critical role of coating geometry: thick jackets ($\varnothing\,400\text{--}450\,\mu\text{m}$, represented by PEEK-1, PEEK-4, and PEEK-7) consistently yield sensitivities between $18.90$ and $20.59\text{ pm/K}$. In contrast, the thin PEEK-3 fiber ($\varnothing\,200\,\mu\text{m}$) achieves only $3.09\text{ pm/K}$. The greater cross-sectional area of the $400\,\mu\text{m}$ coating delivers the required elastic force to overcome the mechanical stiffness of the silica core, achieving a six-fold amplification in temperature response.
+    
+%     \item \textbf{High-stability baseline coatings (Ormocer and Polyimide):} While offering lower sensitivities, Ormocer (FBGS-2, $7.19\text{ pm/K}$), Ormocer-T (DW-3, $4.71\text{ pm/K}$), and Polyimide (POLY-2, $3.64\text{ pm/K}$) exhibit exceptional repeatability. Specifically, DW-3 achieved a cycle-to-cycle dispersion of only $\sigma_{\text{rep}} = 0.03\text{ pm/K}$ (relative dispersion $0.70\%$), showing negligible hysteresis or plastic strain relaxation across repeated spooling and thermal cycles.
+    
+%     \item \textbf{Coating selection criteria:} Although thick PEEK coatings show slightly higher run-to-run dispersion ($\sigma_{\text{rep}} \approx 0.3\text{--}0.7\text{ pm/K}$) due to residual mechanical stress, their high sensitivity ($>18.5\text{ pm/K}$) makes them the ideal choice for high-resolution cryogenic thermometry down to the millikelvin regime. Conversely, Ormocer-T and Polyimide coatings provide a compact, highly repeatable baseline suited for structural monitoring where sensor footprint and absolute drift-free performance are paramount.
+% \end{enumerate}
+
+% =========================================================================
+\subsection{Thermal Resolution in the Milli-Kelvin Regime}
+\label{subsec:millikelvin_resolution}
+% =========================================================================
+
+High-energy physics cryogenic calorimeters and large liquid argon time projection chambers require spatial temperature monitoring capable of tracking sub-$20\text{ mK}$ thermal gradients. While high sensitivity ($S \approx 19\text{--}20\text{ pm/K}$) is essential, the operational detection capability is governed by the system noise floor, the measurement bandwidth, and the signal-to-noise ratio (SNR).
+
+% -------------------------------------------------------------------------
+\subsubsection{Metrological Noise Floor and Detection Limit ($3\sigma$)}
+% -------------------------------------------------------------------------
+
+To quantify the intrinsic thermal resolution of the PEEK-coated FBG sensing system, the baseline noise was experimentally evaluated during steady-state plateaus ($\Delta T / \Delta t \approx 0$). By taking the residual difference between the Bragg wavelength response (converted to equivalent temperature via the calibrated sensitivity $S$) and the reference RTD temperature, the metrological resolution was established using the standard three-sigma ($3\sigma$) detection threshold.
+
+\begin{table}[htpb]
+    \centering
+    \small
+    \caption{Metrological noise floor and thermal resolution limits for PEEK-4 fiber at $T \approx 80\text{ K}$.}
+    \label{tab:noise_resolution_summary}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Filtering Condition} & \textbf{Bandwidth} & \textbf{RMS Noise ($1\sigma$)} & \textbf{Resolution Limit ($3\sigma$)} & \textbf{SNR for $20\text{ mK}$ Step} \\
+        \midrule
+        Raw Optical Data             & 250 Hz             & 13.24 mK                        & 39.71 mK                              & 1.51 \\
+        Moving Average (1 s filter)  & 1 Hz               &  3.35 mK                        & 10.04 mK                              & 5.97 \\
+        Plateau Residuals (vs RTD)   & Steady-state       &  2.47 mK                        &  7.42 mK                              & 8.10 \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+
+Table~\ref{tab:noise_resolution_summary} summarizes the resolution performance under raw and filtered conditions. At the full interrogator acquisition rate of $250\text{ Hz}$, high-frequency optoelectronic noise yields an RMS dispersion of $\sigma_{\text{raw}} = 13.24\text{ mK}$ ($3\sigma = 39.71\text{ mK}$), making single-sample $20\text{ mK}$ identification ambiguous. However, applying a modest 1-second moving average (1\,Hz effective bandwidth) attenuates high-frequency white noise by a factor of four, reducing the RMS noise floor to:
+\begin{equation}
+    \sigma_{\text{filt}} = 3.35\text{ mK} \quad \implies \quad \text{LOD}_{3\sigma} = 3 \times \sigma_{\text{filt}} \approx 10.04\text{ mK}.
+\end{equation}
+
+Under this operational filter, a $20\text{ mK}$ thermal variation corresponds to an amplitude nearly six times larger than the standard deviation ($\text{SNR} \approx 6.0$), comfortably exceeding the metrological $3\sigma$ threshold and enabling unambiguous identification of millikelvin temperature drifts.
+
+% -------------------------------------------------------------------------
+\subsubsection{Experimental Demonstration of Sub-20\,mK Tracking}
+% -------------------------------------------------------------------------
+
+Figure~\ref{fig:milli_kelvin_resolution}(a) presents a high-resolution time series recorded over a stabilized 3-minute plateau window at $T \approx 82.3\text{ K}$. The optical sensor tracks the micro-thermal fluctuations recorded by the reference RTD with sub-millikelvin baseline drift. The residual tracking error displays a mean offset of only $0.048\text{ mK}$ and an RMS standard deviation of $2.47\text{ mK}$.
+
+\begin{figure}[htpb]
+    \centering
+    %\includegraphics[width=\textwidth]{figures/fig4_20mK_resolution.pdf}
+    \caption{Metrological validation of sub-$20\text{ mK}$ thermal resolution for the PEEK-4 fiber. \textbf{(a)} Magnified time series during a stationary temperature plateau, demonstrating real-time tracking of micro-Kelvin thermal fluctuations alongside the $20\text{ mK}$ reference step for scale. \textbf{(b)} Residual error distribution between the FBG-derived temperature and reference RTD, displaying a Gaussian profile with $\sigma = 2.47\text{ mK}$ and confirming an empirical $3\sigma$ resolution limit of $7.42\text{ mK}$.}
+    \label{fig:milli_kelvin_resolution}
+\end{figure}
+
+The corresponding histogram of the temperature residuals is shown in Figure~\ref{fig:milli_kelvin_resolution}(b). The distribution closely follows a Gaussian profile ($\sigma = 2.47\text{ mK}$), with $99.7\%$ of all sample points contained well within the $\pm 7.42\text{ mK}$ envelope. This empirical boundary confirms that the cryogenic FBG sensing system achieves an effective resolution of less than $10\text{ mK}$, making it fully qualified for high-precision cryogenic gradient mapping.
+
+% =========================================================================
+\section{Conclusions}
+\label{sec:conclusions}
+% =========================================================================
+
+This work presents a comprehensive experimental characterization of fiber Bragg grating (FBG) optical sensors for cryogenic thermometry ($77\text{--}92\text{ K}$) using a manual pressure-stabilized liquid nitrogen setup. By enforcing stationary thermal plateaus, thermodynamic equilibrium is established between the cryogen and the reference instrumentation, yielding highly repeatable and linear calibrations ($R^2 \ge 0.9998$) across repeated cooldown and handling cycles.
+
+The comparative study across different polymer and hybrid coatings demonstrates that cryogenic thermal sensitivity is predominantly governed by the mechanical strain transferred from the coating to the silica core due to thermal expansion mismatch. In particular, PEEK-jacketed fibers exhibit a pronounced geometric dependency: increasing the outer diameter from $200\,\mu\text{m}$ to $400\text{--}450\,\mu\text{m}$ yields a six-fold amplification in sensitivity (from $3.09\text{ pm/K}$ to $\sim 19\text{--}20\text{ pm/K}$). This confirms that a critical polymer cross-sectional area is required to overcome the mechanical stiffness of fused silica at cryogenic temperatures where the thermo-optic coefficient vanishes. Conversely, Ormocer, Ormocer-T, and Polyimide coatings exhibit lower sensitivities ($3.6\text{--}7.2\text{ pm/K}$) but remarkable baseline stability, achieving cycle-to-cycle repeatability dispersion below $1\%$ ($\sigma_{\text{rep}} \le 0.08\text{ pm/K}$).
+
+Furthermore, high-resolution noise analysis confirms the viability of thick PEEK-coated FBGs for sub-$20\text{ mK}$ temperature gradient tracking in large-scale cryogenic environments (such as liquid argon time projection chambers). With a 1-second moving average filter, the effective system noise floor drops to $\sigma_{\text{filt}} = 3.35\text{ mK}$, establishing a three-sigma resolution limit of $\text{LOD}_{3\sigma} \approx 10.04\text{ mK}$. Under this condition, a $20\text{ mK}$ thermal shift provides an unambiguous signal-to-noise ratio of $\text{SNR} \approx 6.0$.
+
+Based on these findings, Table~\ref{tab:conclusion_matrix} synthesizes the operational trade-offs to guide coating selection for specific cryogenic applications. Future work will focus on integrating automated pneumatic pressure regulation to streamline plateau stabilization and expanding the sensor network to full-scale vertical mapping in cryogenic detector volumes.
+
+\begin{table}[htpb]
+    \centering
+    \small
+    \caption{Performance matrix and selection guidelines for cryogenic FBG fiber coatings.}
+    \label{tab:conclusion_matrix}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{lcccc}
+        \toprule
+        \textbf{Coating Material} & \textbf{Diameter ($\mu\text{m}$)} & \textbf{Sensitivity} & \textbf{Repeatability} & \textbf{Recommended Application} \\
+        \midrule
+        PEEK (thick)        & 400--450 & High ($\sim 20$ pm/K) & High ($\sigma < 0.3$ pm/K)         & Precision gradient mapping ($<20$ mK) \\
+        PEEK (thin)         & 200      & Low ($\sim 3$ pm/K)   & Excellent ($\sigma = 0.03$ pm/K)   & Compact, low-strain monitoring \\
+        Ormocer / Ormocer-T & 200--250 & Moderate (5--7 pm/K)  & Outstanding ($\sigma \le 0.03$ pm/K) & Long-term drift-free baseline \\
+        Polyimide           & 200      & Low ($\sim 3.6$ pm/K) & High ($\sigma = 0.08$ pm/K)        & Radiation-hard structural tracking \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+
+
+
+
+
+% ==========================================
+% References
+% ==========================================
+\bibliographystyle{elsarticle-num} % O 'IEEEtran' según el formato de la revista
+\bibliography{references}
+
+\end{document}
