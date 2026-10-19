@@ -15,5 +15,6 @@ extracted_plots/
 
 # Heavy data and plot archives
 *.root
+data_root/
 paper_figures/
 backup_history/
