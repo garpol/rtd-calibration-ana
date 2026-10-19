@@ -561,15 +561,17 @@ Table~\ref{tab:noise_resolution_summary} summarizes the noise levels obtained un
     \small
     \caption{Noise floor and thermal resolution limits for PEEK-4 fiber at $T \approx 83.0\text{ K}$.}
     \label{tab:noise_resolution_summary}
+    \resizebox{\linewidth}{!}{%
     \begin{tabular}{lcccc}
         \toprule
-        \textbf{Filtering Condition} & \textbf{Bandwidth} & \textbf{RMS Noise ($1\sigma$)} & \textbf{Resolution Limit ($3\sigma$)} & \textbf{SNR ($20\text{ mK}$ step)} \\
+        \textbf{Condition} & \textbf{Bandwidth} & \textbf{RMS Noise ($1\sigma$)} & \textbf{Resolution ($3\sigma$)} & \textbf{SNR ($20\text{ mK}$)} \\
         \midrule
-        Raw optical data             & 250 Hz             & 9.20 mK                         & 27.59 mK                              & 2.17 \\
-        Moving average (1 s filter)  & 1 Hz               & 0.53 mK                         &  1.58 mK                              & 37.7 \\
-        Tracking residuals (vs RTD)  & Steady-state       & 2.50 mK                         &  7.50 mK                              & 8.00 \\
+        Raw optical data            & 250 Hz       & 9.20 mK & 27.59 mK & 2.17 \\
+        Moving average (1 s filter) & 1 Hz         & 0.53 mK &  1.58 mK & 37.7 \\
+        Tracking residuals (vs RTD) & Steady-state & 2.50 mK &  7.50 mK & 8.00 \\
         \bottomrule
-    \end{tabular}
+    \end{tabular}%
+    }
 \end{table}
 
 At the full acquisition rate ($250\text{ Hz}$), high-frequency optoelectronic noise yields an RMS dispersion of $\sigma_{\mathrm{raw}} = 9.20\text{ mK}$ ($3\sigma = 27.59\text{ mK}$). Applying a $1\text{ s}$ moving average strongly suppresses optical white noise ($\sigma_{\mathrm{filt}} = 0.53\text{ mK}$). When tracking the cryostat temperature against the reference RTD over several minutes, physical thermal drift and convective fluctuations dominate over optical noise, resulting in an empirical standard deviation of $\sigma = 2.50\text{ mK}$.
